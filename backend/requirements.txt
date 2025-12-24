@@ -1,0 +1,28 @@
+Django==5.1.4
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.6.0
+psycopg2-binary==2.9.10
+python-decouple==3.8
+Pillow==11.0.0
+reportlab==4.2.5
+PyPDF2==3.0.1
+celery==5.4.0
+redis==5.2.0
+
+# Para envío de emails
+django-anymail==12.0
+
+# Para IA
+openai==1.55.3
+langchain==0.3.13  # Actualizado - soporta numpy 2.x
+transformers==4.46.3
+torch==2.6
+
+# Para Blockchain
+web3==7.6.0
+eth-account==0.13.4
+
+# Utilidades
+python-dotenv==1.0.1
+requests==2.32.3
