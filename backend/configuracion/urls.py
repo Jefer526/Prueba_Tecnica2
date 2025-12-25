@@ -5,6 +5,28 @@ from django.conf.urls.static import static
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
+from rest_framework.routers import DefaultRouter
+
+# Importar ViewSets
+from empresas.views import EmpresaViewSet
+from productos.views import ProductoViewSet
+from inventario.views import InventarioViewSet, MovimientoInventarioViewSet
+from inteligencia_artificial.views import PrediccionPrecioViewSet, ChatbotViewSet, AnalisisInventarioViewSet
+from blockchain.views import TransaccionBlockchainViewSet, AuditoriaBlockchainViewSet
+
+# Router único para toda la aplicación
+router = DefaultRouter()
+
+# Registrar todos los ViewSets
+router.register(r'empresas', EmpresaViewSet, basename='empresa')
+router.register(r'productos', ProductoViewSet, basename='producto')
+router.register(r'inventario/registros', InventarioViewSet, basename='registro-inventario')
+router.register(r'inventario/movimientos', MovimientoInventarioViewSet, basename='movimiento-inventario')
+router.register(r'ia/predicciones', PrediccionPrecioViewSet, basename='prediccion-precio')
+router.register(r'ia/chatbot', ChatbotViewSet, basename='chatbot')
+router.register(r'ia/analisis', AnalisisInventarioViewSet, basename='analisis-inventario')
+router.register(r'blockchain/transacciones', TransaccionBlockchainViewSet, basename='transaccion-blockchain')
+router.register(r'blockchain/auditorias', AuditoriaBlockchainViewSet, basename='auditoria-blockchain')
 
 @api_view(['GET'])
 def api_root(request):
@@ -48,13 +70,11 @@ urlpatterns = [
     # API Root
     path('api/', api_root, name='api-root'),
     
-    # Apps
+    # Autenticación (no usa router)
     path('api/auth/', include('autenticacion.urls')),
-    path('api/empresas/', include('empresas.urls')),
-    path('api/productos/', include('productos.urls')),
-    path('api/inventario/', include('inventario.urls')),
-    path('api/ia/', include('inteligencia_artificial.urls')),
-    path('api/blockchain/', include('blockchain.urls')),
+    
+    # Todos los ViewSets registrados en el router
+    path('api/', include(router.urls)),
 ]
 
 # Servir archivos media en desarrollo
