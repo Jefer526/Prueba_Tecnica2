@@ -16,6 +16,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
     search_fields = ['codigo', 'nombre', 'caracteristicas']
     ordering_fields = ['nombre', 'precio_usd', 'fecha_creacion']
     ordering = ['nombre']
+    lookup_field = 'codigo'  # Usar código en lugar de pk
     
     def get_serializer_class(self):
         """Retorna el serializer apropiado según la acción"""
@@ -77,26 +78,32 @@ class ProductoViewSet(viewsets.ModelViewSet):
         })
     
     def destroy(self, request, *args, **kwargs):
-        """Elimina (desactiva) un producto"""
+        """Elimina permanentemente un producto de la base de datos"""
         instance = self.get_object()
         
-        # En lugar de eliminar, desactivar
-        instance.activo = False
-        instance.save()
+        # Guardar el nombre para el mensaje de respuesta
+        nombre_producto = instance.nombre
+        
+        # Eliminar de verdad (hard delete)
+        instance.delete()
         
         return Response({
-            'mensaje': 'Producto desactivado exitosamente'
+            'mensaje': f'Producto {nombre_producto} eliminado permanentemente'
         }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
-    def activar(self, request, pk=None):
-        """Activa un producto desactivado"""
+    def activar(self, request, codigo=None):
+        """Activa o desactiva un producto (toggle)"""
         producto = self.get_object()
-        producto.activo = True
+        
+        # Toggle: invertir el estado actual
+        producto.activo = not producto.activo
         producto.save()
         
+        estado = 'activado' if producto.activo else 'desactivado'
+        
         return Response({
-            'mensaje': 'Producto activado exitosamente',
+            'mensaje': f'Producto {estado} exitosamente',
             'producto': ProductoSerializer(producto, context={'request': request}).data
         })
     
@@ -120,7 +127,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
         })
     
     @action(detail=True, methods=['post'])
-    def actualizar_precios(self, request, pk=None):
+    def actualizar_precios(self, request, codigo=None):
         """Actualiza los precios en todas las monedas basado en USD"""
         producto = self.get_object()
         

@@ -74,9 +74,11 @@ class Producto(models.Model):
     
     def calcular_precios_monedas(self):
         """Calcula precios en otras monedas basado en USD"""
-        # Tasas de cambio aproximadas (se pueden obtener de una API en producción)
-        TASA_USD_A_COP = 4000
-        TASA_USD_A_EUR = 0.92
+        from decimal import Decimal
+        
+        # Tasas de cambio (usar Decimal en lugar de float)
+        TASA_USD_A_COP = Decimal('4000')
+        TASA_USD_A_EUR = Decimal('0.92')
         
         if not self.precio_cop:
             self.precio_cop = self.precio_usd * TASA_USD_A_COP

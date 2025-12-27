@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import RegistroInventario, MovimientoInventario
+from productos.models import Producto
+from empresas.models import Empresa
 from productos.serializers import ProductoListaSerializer
 from empresas.serializers import EmpresaListaSerializer
 
@@ -13,6 +15,16 @@ class RegistroInventarioSerializer(serializers.ModelSerializer):
         max_digits=12,
         decimal_places=2,
         read_only=True
+    )
+    
+    # Usar SlugRelatedField para aceptar código y NIT
+    producto = serializers.SlugRelatedField(
+        slug_field='codigo',
+        queryset=Producto.objects.all()
+    )
+    empresa = serializers.SlugRelatedField(
+        slug_field='nit',
+        queryset=Empresa.objects.all()
     )
     
     class Meta:
@@ -42,20 +54,6 @@ class RegistroInventarioSerializer(serializers.ModelSerializer):
             'fecha_actualizacion',
         ]
     
-    def validate(self, datos):
-        """Valida que no exista un registro duplicado"""
-        producto = datos.get('producto')
-        empresa = datos.get('empresa')
-        
-        # Verificar que el producto pertenezca a la empresa
-        if producto and empresa:
-            if producto.empresa != empresa:
-                raise serializers.ValidationError({
-                    'producto': 'El producto no pertenece a la empresa seleccionada'
-                })
-        
-        return datos
-    
     def validate_cantidad(self, valor):
         """Valida que la cantidad sea no negativa"""
         if valor < 0:
@@ -76,7 +74,7 @@ class RegistroInventarioSerializer(serializers.ModelSerializer):
 class MovimientoInventarioSerializer(serializers.ModelSerializer):
     """Serializer para el modelo MovimientoInventario"""
     
-    usuario_nombre = serializers.CharField(source='usuario.nombre_completo', read_only=True)
+    usuario_nombre = serializers.SerializerMethodField()
     registro_inventario_detalle = RegistroInventarioSerializer(
         source='registro_inventario',
         read_only=True
@@ -102,6 +100,26 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
             'fecha_movimiento',
             'hash_blockchain',
         ]
+    
+    def get_usuario_nombre(self, obj):
+        """Obtiene el nombre del usuario que realizó el movimiento"""
+        if not obj.usuario:
+            return 'Sistema'
+        
+        # Intentar obtener nombre_completo
+        if hasattr(obj.usuario, 'nombre_completo') and obj.usuario.nombre_completo:
+            return obj.usuario.nombre_completo
+        
+        # Si no tiene nombre_completo, usar correo
+        if hasattr(obj.usuario, 'correo') and obj.usuario.correo:
+            return obj.usuario.correo
+        
+        # Si no tiene correo, usar username
+        if hasattr(obj.usuario, 'username') and obj.usuario.username:
+            return obj.usuario.username
+        
+        # Último recurso
+        return f'Usuario {obj.usuario.id}'
     
     def validate_cantidad(self, valor):
         """Valida que la cantidad sea positiva"""

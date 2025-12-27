@@ -73,11 +73,14 @@ class ProductoCrearSerializer(serializers.ModelSerializer):
             'nombre',
             'caracteristicas',
             'precio_usd',
-            'precio_cop',
-            'precio_eur',
             'empresa',
             'imagen',
+            'activo',
         ]
+        extra_kwargs = {
+            'caracteristicas': {'required': False, 'allow_blank': True},
+            'imagen': {'required': False, 'allow_null': True},
+        }
     
     def validate_precio_usd(self, valor):
         """Valida que el precio sea positivo"""
@@ -86,6 +89,16 @@ class ProductoCrearSerializer(serializers.ModelSerializer):
                 'El precio debe ser mayor a 0'
             )
         return valor
+    
+    def create(self, validated_data):
+        """Crea el producto sin los campos precio_cop y precio_eur"""
+        # Eliminar precio_cop y precio_eur si vienen en los datos
+        validated_data.pop('precio_cop', None)
+        validated_data.pop('precio_eur', None)
+        
+        # Crear el producto (los precios se calcularán automáticamente en el modelo)
+        producto = Producto.objects.create(**validated_data)
+        return producto
 
 
 class ProductoListaSerializer(serializers.ModelSerializer):
@@ -100,6 +113,8 @@ class ProductoListaSerializer(serializers.ModelSerializer):
             'codigo',
             'nombre',
             'precio_usd',
+            'precio_cop',
+            'precio_eur',
             'empresa',
             'empresa_nombre',
             'activo',

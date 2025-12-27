@@ -69,26 +69,32 @@ class EmpresaViewSet(viewsets.ModelViewSet):
         })
     
     def destroy(self, request, *args, **kwargs):
-        """Elimina (desactiva) una empresa"""
+        """Elimina permanentemente una empresa de la base de datos"""
         instance = self.get_object()
         
-        # En lugar de eliminar, desactivar
-        instance.activo = False
-        instance.save()
+        # Guardar el nombre para el mensaje de respuesta
+        nombre_empresa = instance.nombre
+        
+        # Eliminar de verdad (hard delete)
+        instance.delete()
         
         return Response({
-            'mensaje': 'Empresa desactivada exitosamente'
+            'mensaje': f'Empresa {nombre_empresa} eliminada permanentemente'
         }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
     def activar(self, request, pk=None):
-        """Activa una empresa desactivada"""
+        """Activa o desactiva una empresa (toggle)"""
         empresa = self.get_object()
-        empresa.activo = True
+        
+        # Toggle: invertir el estado actual
+        empresa.activo = not empresa.activo
         empresa.save()
         
+        estado = 'activada' if empresa.activo else 'desactivada'
+        
         return Response({
-            'mensaje': 'Empresa activada exitosamente',
+            'mensaje': f'Empresa {estado} exitosamente',
             'empresa': EmpresaSerializer(empresa).data
         })
     

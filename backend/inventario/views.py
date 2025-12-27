@@ -346,3 +346,534 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
             registro.cantidad = movimiento.cantidad
         
         registro.save()
+    
+    @action(detail=False, methods=['post'])
+    def generar_pdf(self, request):
+        """Genera un PDF con los movimientos de inventario"""
+        producto_codigo = request.data.get('producto_codigo', None)
+        empresa_nit = request.data.get('empresa_nit', None)
+        fecha_inicio = request.data.get('fecha_inicio', None)
+        fecha_fin = request.data.get('fecha_fin', None)
+        
+        # Filtrar movimientos
+        movimientos = MovimientoInventario.objects.select_related(
+            'registro_inventario__producto',
+            'registro_inventario__empresa',
+            'usuario'
+        ).all()
+        
+        if producto_codigo:
+            movimientos = movimientos.filter(registro_inventario__producto__codigo=producto_codigo)
+        
+        if empresa_nit:
+            movimientos = movimientos.filter(registro_inventario__empresa__nit=empresa_nit)
+        
+        if fecha_inicio:
+            movimientos = movimientos.filter(fecha_movimiento__gte=fecha_inicio)
+        
+        if fecha_fin:
+            movimientos = movimientos.filter(fecha_movimiento__lte=fecha_fin)
+        
+        titulo = "Movimientos de Inventario"
+        if producto_codigo:
+            try:
+                from productos.models import Producto
+                producto = Producto.objects.get(codigo=producto_codigo)
+                titulo = f"Movimientos - {producto.nombre}"
+            except:
+                pass
+        
+        # Crear PDF en memoria
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        elementos = []
+        
+        # Estilos
+        estilos = getSampleStyleSheet()
+        estilo_titulo = ParagraphStyle(
+            'CustomTitle',
+            parent=estilos['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#1a237e'),
+            spaceAfter=30,
+            alignment=TA_CENTER
+        )
+        
+        estilo_subtitulo = ParagraphStyle(
+            'CustomSubtitle',
+            parent=estilos['Heading2'],
+            fontSize=12,
+            textColor=colors.HexColor('#555555'),
+            spaceAfter=12,
+            alignment=TA_CENTER
+        )
+        
+        # Título
+        elementos.append(Paragraph(titulo, estilo_titulo))
+        elementos.append(Paragraph(
+            f"Fecha de generación: {timezone.now().strftime('%d/%m/%Y %H:%M')}",
+            estilo_subtitulo
+        ))
+        elementos.append(Spacer(1, 0.3*inch))
+        
+        # Datos de la tabla
+        datos_tabla = [['Fecha', 'Tipo', 'Producto', 'Empresa', 'Cantidad', 'Usuario', 'Motivo']]
+        
+        for mov in movimientos:
+            # Iconos para tipo de movimiento
+            tipo_icono = {
+                'ENTRADA': '📥 Entrada',
+                'SALIDA': '📤 Salida',
+                'AJUSTE': '🔧 Ajuste'
+            }.get(mov.tipo_movimiento, mov.tipo_movimiento)
+            
+            datos_tabla.append([
+                mov.fecha_movimiento.strftime('%d/%m/%Y %H:%M'),
+                tipo_icono,
+                mov.registro_inventario.producto.nombre[:20],
+                mov.registro_inventario.empresa.nombre[:15],
+                str(mov.cantidad),
+                mov.usuario.nombre_completo[:15] if mov.usuario else 'N/A',
+                mov.motivo[:30] if mov.motivo else '-'
+            ])
+        
+        # Crear tabla
+        tabla = Table(datos_tabla, colWidths=[1.2*inch, 1*inch, 1.5*inch, 1.2*inch, 0.7*inch, 1.2*inch, 1.5*inch])
+        
+        # Estilo de la tabla
+        tabla.setStyle(TableStyle([
+            # Encabezado
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            
+            # Cuerpo
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('ALIGN', (4, 1), (4, -1), 'CENTER'),  # Cantidad centrada
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            
+            # Bordes
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#1a237e')),
+        ]))
+        
+        elementos.append(tabla)
+        
+        # Pie de página
+        elementos.append(Spacer(1, 0.5*inch))
+        
+        # Estadísticas
+        total_entradas = movimientos.filter(tipo_movimiento='ENTRADA').count()
+        total_salidas = movimientos.filter(tipo_movimiento='SALIDA').count()
+        total_ajustes = movimientos.filter(tipo_movimiento='AJUSTE').count()
+        
+        elementos.append(Paragraph(
+            f"Total de movimientos: {movimientos.count()} | " +
+            f"Entradas: {total_entradas} | Salidas: {total_salidas} | Ajustes: {total_ajustes}",
+            estilos['Normal']
+        ))
+        
+        # Generar PDF
+        doc.build(elementos)
+        buffer.seek(0)
+        
+        # Guardar temporalmente
+        nombre_archivo = f"movimientos_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        ruta_archivo = os.path.join(settings.MEDIA_ROOT, 'pdfs', nombre_archivo)
+        
+        # Crear directorio si no existe
+        os.makedirs(os.path.dirname(ruta_archivo), exist_ok=True)
+        
+        with open(ruta_archivo, 'wb') as f:
+            f.write(buffer.getvalue())
+        
+        # URL del archivo
+        url_archivo = request.build_absolute_uri(settings.MEDIA_URL + 'pdfs/' + nombre_archivo)
+        
+        return Response({
+            'mensaje': 'PDF generado exitosamente',
+            'url': url_archivo,
+            'nombre_archivo': nombre_archivo,
+            'total_movimientos': movimientos.count()
+        })
+    
+    @action(detail=False, methods=['post'])
+    def enviar_pdf_email(self, request):
+        """Envía PDF de movimientos por email con filtros opcionales"""
+        correo_destino = request.data.get('correo_destino', None)
+        producto_codigo = request.data.get('producto_codigo', None)
+        empresa_nit = request.data.get('empresa_nit', None)
+        fecha_inicio = request.data.get('fecha_inicio', None)
+        fecha_fin = request.data.get('fecha_fin', None)
+        
+        if not correo_destino:
+            return Response(
+                {'error': 'El correo de destino es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Filtrar movimientos
+        movimientos = MovimientoInventario.objects.select_related(
+            'registro_inventario__producto',
+            'registro_inventario__empresa',
+            'usuario'
+        ).all()
+        
+        if producto_codigo:
+            movimientos = movimientos.filter(registro_inventario__producto__codigo=producto_codigo)
+        
+        if empresa_nit:
+            movimientos = movimientos.filter(registro_inventario__empresa__nit=empresa_nit)
+        
+        if fecha_inicio:
+            movimientos = movimientos.filter(fecha_movimiento__gte=fecha_inicio)
+        
+        if fecha_fin:
+            movimientos = movimientos.filter(fecha_movimiento__lte=fecha_fin)
+        
+        # Generar título según filtros
+        titulo = "Movimientos de Inventario"
+        if producto_codigo:
+            try:
+                from productos.models import Producto
+                producto = Producto.objects.get(codigo=producto_codigo)
+                titulo = f"Movimientos - {producto.nombre}"
+            except:
+                pass
+        
+        # Crear PDF en memoria
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        elementos = []
+        
+        # Estilos
+        estilos = getSampleStyleSheet()
+        estilo_titulo = ParagraphStyle(
+            'CustomTitle',
+            parent=estilos['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#1a237e'),
+            spaceAfter=30,
+            alignment=TA_CENTER
+        )
+        
+        estilo_subtitulo = ParagraphStyle(
+            'CustomSubtitle',
+            parent=estilos['Heading2'],
+            fontSize=12,
+            textColor=colors.HexColor('#555555'),
+            spaceAfter=12,
+            alignment=TA_CENTER
+        )
+        
+        # Título
+        elementos.append(Paragraph(titulo, estilo_titulo))
+        elementos.append(Paragraph(
+            f"Fecha de generación: {timezone.now().strftime('%d/%m/%Y %H:%M')}",
+            estilo_subtitulo
+        ))
+        elementos.append(Spacer(1, 0.3*inch))
+        
+        # Datos de la tabla
+        datos_tabla = [['Fecha', 'Tipo', 'Producto', 'Empresa', 'Cantidad', 'Usuario', 'Motivo']]
+        
+        for mov in movimientos:
+            # Iconos para tipo de movimiento
+            tipo_icono = {
+                'ENTRADA': '📥 Entrada',
+                'SALIDA': '📤 Salida',
+                'AJUSTE': '🔧 Ajuste'
+            }.get(mov.tipo_movimiento, mov.tipo_movimiento)
+            
+            datos_tabla.append([
+                mov.fecha_movimiento.strftime('%d/%m/%Y %H:%M'),
+                tipo_icono,
+                mov.registro_inventario.producto.nombre[:20],
+                mov.registro_inventario.empresa.nombre[:15],
+                str(mov.cantidad),
+                mov.usuario.nombre_completo[:15] if mov.usuario else 'N/A',
+                mov.motivo[:30] if mov.motivo else '-'
+            ])
+        
+        # Crear tabla
+        tabla = Table(datos_tabla, colWidths=[1.2*inch, 1*inch, 1.5*inch, 1.2*inch, 0.7*inch, 1.2*inch, 1.5*inch])
+        
+        # Estilo de la tabla
+        tabla.setStyle(TableStyle([
+            # Encabezado
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            
+            # Cuerpo
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('ALIGN', (4, 1), (4, -1), 'CENTER'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            
+            # Bordes
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#1a237e')),
+        ]))
+        
+        elementos.append(tabla)
+        
+        # Pie de página
+        elementos.append(Spacer(1, 0.5*inch))
+        
+        # Estadísticas
+        total_entradas = movimientos.filter(tipo_movimiento='ENTRADA').count()
+        total_salidas = movimientos.filter(tipo_movimiento='SALIDA').count()
+        total_ajustes = movimientos.filter(tipo_movimiento='AJUSTE').count()
+        
+        elementos.append(Paragraph(
+            f"Total de movimientos: {movimientos.count()} | " +
+            f"Entradas: {total_entradas} | Salidas: {total_salidas} | Ajustes: {total_ajustes}",
+            estilos['Normal']
+        ))
+        
+        # Generar PDF
+        doc.build(elementos)
+        buffer.seek(0)
+        
+        # Preparar email
+        asunto = f"Movimientos de Inventario - {timezone.now().strftime('%d/%m/%Y')}"
+        
+        if producto_codigo:
+            asunto = f"Movimientos de {titulo.split(' - ')[1] if ' - ' in titulo else producto_codigo} - {timezone.now().strftime('%d/%m/%Y')}"
+        
+        mensaje = f"""
+        Estimado usuario,
+
+        Adjunto encontrará el reporte de movimientos de inventario solicitado.
+
+        Detalles del reporte:
+        - Total de movimientos: {movimientos.count()}
+        - Entradas: {total_entradas}
+        - Salidas: {total_salidas}
+        - Ajustes: {total_ajustes}
+        - Fecha de generación: {timezone.now().strftime('%d/%m/%Y %H:%M')}
+
+        Saludos cordiales,
+        Sistema de Gestión de Inventario
+        """
+        
+        # Crear email
+        email = EmailMessage(
+            subject=asunto,
+            body=mensaje,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[correo_destino],
+        )
+        
+        # Adjuntar PDF
+        nombre_archivo = f"movimientos_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        email.attach(nombre_archivo, buffer.getvalue(), 'application/pdf')
+        
+        try:
+            email.send()
+            return Response({
+                'mensaje': f'PDF enviado exitosamente a {correo_destino}',
+                'correo_destino': correo_destino,
+                'total_movimientos': movimientos.count()
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Error al enviar el email: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'])
+    def enviar_pdf_email(self, request):
+        """Envía el PDF de movimientos por correo electrónico"""
+        correo_destino = request.data.get('correo_destino')
+        producto_codigo = request.data.get('producto_codigo', None)
+        empresa_nit = request.data.get('empresa_nit', None)
+        fecha_inicio = request.data.get('fecha_inicio', None)
+        fecha_fin = request.data.get('fecha_fin', None)
+        
+        if not correo_destino:
+            return Response(
+                {'error': 'El correo de destino es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Filtrar movimientos
+        movimientos = MovimientoInventario.objects.select_related(
+            'registro_inventario__producto',
+            'registro_inventario__empresa',
+            'usuario'
+        ).all()
+        
+        if producto_codigo:
+            movimientos = movimientos.filter(registro_inventario__producto__codigo=producto_codigo)
+        
+        if empresa_nit:
+            movimientos = movimientos.filter(registro_inventario__empresa__nit=empresa_nit)
+        
+        if fecha_inicio:
+            movimientos = movimientos.filter(fecha_movimiento__gte=fecha_inicio)
+        
+        if fecha_fin:
+            movimientos = movimientos.filter(fecha_movimiento__lte=fecha_fin)
+        
+        titulo = "Movimientos de Inventario"
+        if producto_codigo:
+            try:
+                from productos.models import Producto
+                producto = Producto.objects.get(codigo=producto_codigo)
+                titulo = f"Movimientos - {producto.nombre}"
+            except:
+                pass
+        
+        # Crear PDF en memoria
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        elementos = []
+        
+        # Estilos
+        estilos = getSampleStyleSheet()
+        estilo_titulo = ParagraphStyle(
+            'CustomTitle',
+            parent=estilos['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#1a237e'),
+            spaceAfter=30,
+            alignment=TA_CENTER
+        )
+        
+        estilo_subtitulo = ParagraphStyle(
+            'CustomSubtitle',
+            parent=estilos['Heading2'],
+            fontSize=12,
+            textColor=colors.HexColor('#555555'),
+            spaceAfter=12,
+            alignment=TA_CENTER
+        )
+        
+        # Título
+        elementos.append(Paragraph(titulo, estilo_titulo))
+        elementos.append(Paragraph(
+            f"Fecha de generación: {timezone.now().strftime('%d/%m/%Y %H:%M')}",
+            estilo_subtitulo
+        ))
+        elementos.append(Spacer(1, 0.3*inch))
+        
+        # Datos de la tabla
+        datos_tabla = [['Fecha', 'Tipo', 'Producto', 'Empresa', 'Cantidad', 'Usuario', 'Motivo']]
+        
+        for mov in movimientos:
+            tipo_icono = {
+                'ENTRADA': '📥 Entrada',
+                'SALIDA': '📤 Salida',
+                'AJUSTE': '🔧 Ajuste'
+            }.get(mov.tipo_movimiento, mov.tipo_movimiento)
+            
+            datos_tabla.append([
+                mov.fecha_movimiento.strftime('%d/%m/%Y %H:%M'),
+                tipo_icono,
+                mov.registro_inventario.producto.nombre[:20],
+                mov.registro_inventario.empresa.nombre[:15],
+                str(mov.cantidad),
+                mov.usuario.nombre_completo[:15] if mov.usuario else 'N/A',
+                mov.motivo[:30] if mov.motivo else '-'
+            ])
+        
+        # Crear tabla
+        tabla = Table(datos_tabla, colWidths=[1.2*inch, 1*inch, 1.5*inch, 1.2*inch, 0.7*inch, 1.2*inch, 1.5*inch])
+        
+        # Estilo de la tabla
+        tabla.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('ALIGN', (4, 1), (4, -1), 'CENTER'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.HexColor('#1a237e')),
+        ]))
+        
+        elementos.append(tabla)
+        
+        # Pie de página
+        elementos.append(Spacer(1, 0.5*inch))
+        
+        total_entradas = movimientos.filter(tipo_movimiento='ENTRADA').count()
+        total_salidas = movimientos.filter(tipo_movimiento='SALIDA').count()
+        total_ajustes = movimientos.filter(tipo_movimiento='AJUSTE').count()
+        
+        elementos.append(Paragraph(
+            f"Total de movimientos: {movimientos.count()} | " +
+            f"Entradas: {total_entradas} | Salidas: {total_salidas} | Ajustes: {total_ajustes}",
+            estilos['Normal']
+        ))
+        
+        # Generar PDF
+        doc.build(elementos)
+        pdf_data = buffer.getvalue()
+        buffer.seek(0)
+        
+        # Preparar email
+        asunto = titulo
+        mensaje = f"""
+Estimado usuario,
+
+Adjunto encontrará el reporte de movimientos de inventario solicitado.
+
+Detalles del reporte:
+- Total de movimientos: {movimientos.count()}
+- Entradas: {total_entradas}
+- Salidas: {total_salidas}
+- Ajustes: {total_ajustes}
+- Fecha de generación: {timezone.now().strftime('%d/%m/%Y %H:%M')}
+
+Saludos cordiales,
+Sistema de Gestión de Inventario
+        """
+        
+        # Crear mensaje de email
+        email = EmailMessage(
+            subject=asunto,
+            body=mensaje,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[correo_destino],
+        )
+        
+        # Adjuntar PDF
+        nombre_archivo = f"movimientos_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        email.attach(nombre_archivo, pdf_data, 'application/pdf')
+        
+        # Enviar email
+        try:
+            email.send()
+            return Response({
+                'mensaje': f'PDF enviado exitosamente a {correo_destino}',
+                'correo_destino': correo_destino,
+                'total_movimientos': movimientos.count()
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Error al enviar el email: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

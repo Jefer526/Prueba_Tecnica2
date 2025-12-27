@@ -71,6 +71,8 @@ class EmpresaListaSerializer(serializers.ModelSerializer):
         fields = [
             'nit',
             'nombre',
+            'direccion',
             'telefono',
+            'activo',
             'total_productos',
         ]
