@@ -59,22 +59,20 @@ const Navbar = () => {
               Inventario
             </Link>
 
-            {esAdmin && (
-              <>
-                <Link
-                  to="/ia"
-                  className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  IA
-                </Link>
-                <Link
-                  to="/blockchain"
-                  className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                >
-                  Blockchain
-                </Link>
-              </>
-            )}
+            {/* ✅ CAMBIO: Eliminar restricción esAdmin && */}
+            <Link
+              to="/ia"
+              className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+            >
+              IA
+            </Link>
+            
+            <Link
+              to="/blockchain"
+              className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+            >
+              Blockchain
+            </Link>
 
             {/* Usuario */}
             <div className="flex items-center ml-4 pl-4 border-l border-gray-300">
@@ -154,24 +152,21 @@ const Navbar = () => {
             >
               Inventario
             </Link>
-            {esAdmin && (
-              <>
-                <Link
-                  to="/ia"
-                  className="block text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-md"
-                  onClick={() => setMenuAbierto(false)}
-                >
-                  IA
-                </Link>
-                <Link
-                  to="/blockchain"
-                  className="block text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-md"
-                  onClick={() => setMenuAbierto(false)}
-                >
-                  Blockchain
-                </Link>
-              </>
-            )}
+            {/* ✅ CAMBIO: Eliminar restricción esAdmin && */}
+            <Link
+              to="/ia"
+              className="block text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-md"
+              onClick={() => setMenuAbierto(false)}
+            >
+              IA
+            </Link>
+            <Link
+              to="/blockchain"
+              className="block text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-md"
+              onClick={() => setMenuAbierto(false)}
+            >
+              Blockchain
+            </Link>
             <div className="border-t border-gray-200 mt-2 pt-2">
               <p className="text-sm text-gray-600 px-3 py-1">
                 {usuario?.nombre_completo || usuario?.correo}

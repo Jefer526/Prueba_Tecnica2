@@ -12,6 +12,7 @@ import Alert from '../atoms/Alert';
 import Select from '../atoms/Select';
 import Textarea from '../atoms/Textarea';
 
+
 const Productos = () => {
   const { esAdministrador } = useAuthStore();
   const [productos, setProductos] = useState([]);
@@ -31,6 +32,9 @@ const Productos = () => {
     empresa: '',
     imagen: null,
   });
+
+  // ✅ Obtener si es administrador
+  const esAdmin = esAdministrador();
 
   const columnas = [
     { titulo: 'Código', campo: 'codigo' },
@@ -107,6 +111,12 @@ const Productos = () => {
   };
 
   const abrirModal = (producto = null) => {
+    // ✅ Verificar permisos antes de abrir modal
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
+      return;
+    }
+
     if (producto) {
       setProductoSeleccionado(producto);
       setFormulario({
@@ -211,6 +221,12 @@ const Productos = () => {
   const manejarSubmit = async (e) => {
     e.preventDefault();
 
+    // ✅ Verificar permisos antes de guardar
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
+      return;
+    }
+
     try {
       // Crear FormData para enviar archivo
       const formData = new FormData();
@@ -255,6 +271,12 @@ const Productos = () => {
   };
 
   const manejarEliminar = async (producto) => {
+    // ✅ Verificar permisos antes de eliminar
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
+      return;
+    }
+
     if (window.confirm(`¿Está seguro de eliminar el producto ${producto.nombre}?`)) {
       try {
         await productosService.eliminar(producto.codigo);
@@ -268,6 +290,12 @@ const Productos = () => {
   };
 
   const manejarActivar = async (producto) => {
+    // ✅ Verificar permisos antes de activar/desactivar
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
+      return;
+    }
+
     try {
       await productosService.activar(producto.codigo);
       const nuevoEstado = !producto.activo;
@@ -286,7 +314,10 @@ const Productos = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Productos</h1>
-        <Boton onClick={() => abrirModal()}>+ Nuevo Producto</Boton>
+        {/* ✅ Solo mostrar botón si es administrador */}
+        {esAdmin && (
+          <Boton onClick={() => abrirModal()}>+ Nuevo Producto</Boton>
+        )}
       </div>
 
       {alerta && (
@@ -301,117 +332,119 @@ const Productos = () => {
         <DataTable
           columnas={columnas}
           datos={productosFiltrados}
-          onEditar={abrirModal}
-          onEliminar={manejarEliminar}
-          onVer={manejarActivar}
+          onEditar={esAdmin ? abrirModal : undefined}
+          onEliminar={esAdmin ? manejarEliminar : undefined}
+          onVer={esAdmin ? manejarActivar : undefined}
           estaCargando={estaCargando}
         />
       </Card>
 
-      {/* Modal de Crear/Editar Producto */}
-      <Modal
-        estaAbierto={modalAbierto}
-        onCerrar={cerrarModal}
-        titulo={productoSeleccionado ? 'Editar Producto' : 'Nuevo Producto'}
-        tamaño="lg"
-      >
-        <form onSubmit={manejarSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              etiqueta="Nombre del Producto"
-              nombre="nombre"
-              tipo="text"
-              placeholder="Ej: Laptop HP Pavilion"
-              valor={formulario.nombre}
-              onChange={manejarCambio}
-              requerido
-            />
-
-            <div>
+      {/* ✅ Solo renderizar modal si es administrador */}
+      {esAdmin && (
+        <Modal
+          estaAbierto={modalAbierto}
+          onCerrar={cerrarModal}
+          titulo={productoSeleccionado ? 'Editar Producto' : 'Nuevo Producto'}
+          tamaño="lg"
+        >
+          <form onSubmit={manejarSubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
-                etiqueta="Código del Producto"
-                nombre="codigo"
+                etiqueta="Nombre del Producto"
+                nombre="nombre"
                 tipo="text"
-                placeholder={productoSeleccionado ? "" : "Ej: LA001"}
-                valor={formulario.codigo}
+                placeholder="Ej: Laptop HP Pavilion"
+                valor={formulario.nombre}
                 onChange={manejarCambio}
                 requerido
-                deshabilitado={!!productoSeleccionado}
               />
-              {!productoSeleccionado && formulario.nombre && (
-                <p className="text-xs text-gray-500 mt-1">
-                  💡 Generado automáticamente. Puedes editarlo si deseas.
-                </p>
-              )}
-            </div>
 
-            <div className="md:col-span-2">
-              <label className="form-label">
-                Empresa <span className="text-red-500">*</span>
-              </label>
-              <Select
-                nombre="empresa"
-                valor={formulario.empresa}
-                onChange={manejarCambio}
-                opciones={empresas.map(emp => ({
-                  valor: emp.nit,
-                  etiqueta: emp.nombre
-                }))}
-                requerido
-              />
-            </div>
-
-            <FormField
-              etiqueta="Precio USD"
-              nombre="precio_usd"
-              tipo="number"
-              step="0.01"
-              placeholder="99.99"
-              valor={formulario.precio_usd}
-              onChange={manejarCambio}
-              requerido
-            />
-
-            <div>
-              <label className="form-label">Imagen del Producto</label>
-              <input
-                type="file"
-                name="imagen"
-                accept="image/*"
-                onChange={manejarCambioImagen}
-                className="form-input"
-              />
-              {imagenPreview && (
-                <img
-                  src={imagenPreview}
-                  alt="Preview"
-                  className="mt-2 w-32 h-32 object-cover rounded"
+              <div>
+                <FormField
+                  etiqueta="Código del Producto"
+                  nombre="codigo"
+                  tipo="text"
+                  placeholder={productoSeleccionado ? "" : "Ej: LA001"}
+                  valor={formulario.codigo}
+                  onChange={manejarCambio}
+                  requerido
+                  deshabilitado={!!productoSeleccionado}
                 />
-              )}
-            </div>
+                {!productoSeleccionado && formulario.nombre && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Generado automáticamente. Puedes editarlo si deseas.
+                  </p>
+                )}
+              </div>
 
-            <div className="md:col-span-2">
-              <label className="form-label">Características</label>
-              <Textarea
-                nombre="caracteristicas"
-                placeholder="Descripción y características del producto..."
-                valor={formulario.caracteristicas}
+              <div className="md:col-span-2">
+                <label className="form-label">
+                  Empresa <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  nombre="empresa"
+                  valor={formulario.empresa}
+                  onChange={manejarCambio}
+                  opciones={empresas.map(emp => ({
+                    valor: emp.nit,
+                    etiqueta: emp.nombre
+                  }))}
+                  requerido
+                />
+              </div>
+
+              <FormField
+                etiqueta="Precio USD"
+                nombre="precio_usd"
+                tipo="number"
+                step="0.01"
+                placeholder="99.99"
+                valor={formulario.precio_usd}
                 onChange={manejarCambio}
-                filas={4}
+                requerido
               />
-            </div>
-          </div>
 
-          <div className="flex justify-end gap-3 mt-6">
-            <Boton tipo="button" variante="secondary" onClick={cerrarModal}>
-              Cancelar
-            </Boton>
-            <Boton tipo="submit">
-              {productoSeleccionado ? 'Actualizar' : 'Crear'}
-            </Boton>
-          </div>
-        </form>
-      </Modal>
+              <div>
+                <label className="form-label">Imagen del Producto</label>
+                <input
+                  type="file"
+                  name="imagen"
+                  accept="image/*"
+                  onChange={manejarCambioImagen}
+                  className="form-input"
+                />
+                {imagenPreview && (
+                  <img
+                    src={imagenPreview}
+                    alt="Preview"
+                    className="mt-2 w-32 h-32 object-cover rounded"
+                  />
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="form-label">Características</label>
+                <Textarea
+                  nombre="caracteristicas"
+                  placeholder="Descripción y características del producto..."
+                  valor={formulario.caracteristicas}
+                  onChange={manejarCambio}
+                  filas={4}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <Boton tipo="button" variante="secondary" onClick={cerrarModal}>
+                Cancelar
+              </Boton>
+              <Boton tipo="submit">
+                {productoSeleccionado ? 'Actualizar' : 'Crear'}
+              </Boton>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

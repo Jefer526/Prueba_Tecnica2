@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import useAuthStore from '../../stores/useAuthStore';
 import inventarioService from '../../services/inventarioService';
 import Card from '../atoms/Card';
 import Boton from '../atoms/Boton';
@@ -13,6 +14,7 @@ import Select from '../atoms/Select';
 const DetalleProductoInventario = () => {
   const { codigo } = useParams();
   const navigate = useNavigate();
+  const { esAdministrador } = useAuthStore();
   
   const [registro, setRegistro] = useState(null);
   const [movimientos, setMovimientos] = useState([]);
@@ -24,6 +26,9 @@ const DetalleProductoInventario = () => {
   const [modalEmailAbierto, setModalEmailAbierto] = useState(false);
   const [correoDestino, setCorreoDestino] = useState('');
   const [enviandoEmail, setEnviandoEmail] = useState(false);
+  
+  // ✅ Obtener si es administrador
+  const esAdmin = esAdministrador();
   
   const [formularioMovimiento, setFormularioMovimiento] = useState({
     tipo_movimiento: 'ENTRADA',
@@ -78,13 +83,11 @@ const DetalleProductoInventario = () => {
     try {
       setEstaCargando(true);
       
-      // Obtener todos los registros de inventario
       const registrosData = await inventarioService.obtenerRegistros();
       const registrosArray = Array.isArray(registrosData) 
         ? registrosData 
         : (registrosData.results || registrosData.data || []);
       
-      // Buscar el registro del producto específico
       const registroEncontrado = registrosArray.find(r => r.producto === codigo);
       
       if (!registroEncontrado) {
@@ -94,7 +97,6 @@ const DetalleProductoInventario = () => {
       
       setRegistro(registroEncontrado);
       
-      // Obtener movimientos del producto
       const movimientosData = await inventarioService.obtenerMovimientos({
         registro_inventario: registroEncontrado.id
       });
@@ -105,7 +107,6 @@ const DetalleProductoInventario = () => {
       
       setMovimientos(movimientosArray);
       
-      // Calcular estadísticas
       const stats = {
         totalMovimientos: movimientosArray.length,
         totalEntradas: movimientosArray.filter(m => m.tipo_movimiento === 'ENTRADA').length,
@@ -128,6 +129,12 @@ const DetalleProductoInventario = () => {
   };
 
   const abrirModalMovimiento = () => {
+    // ✅ Verificar permisos antes de abrir modal
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para registrar movimientos');
+      return;
+    }
+
     setFormularioMovimiento({
       tipo_movimiento: 'ENTRADA',
       cantidad: '',
@@ -156,6 +163,12 @@ const DetalleProductoInventario = () => {
   const manejarSubmitMovimiento = async (e) => {
     e.preventDefault();
 
+    // ✅ Verificar permisos antes de registrar
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para registrar movimientos');
+      return;
+    }
+
     try {
       await inventarioService.crearMovimiento({
         registro_inventario: registro.id,
@@ -181,7 +194,6 @@ const DetalleProductoInventario = () => {
       });
       
       if (respuesta.url) {
-        // Crear enlace temporal para descargar
         const enlace = document.createElement('a');
         enlace.href = respuesta.url;
         enlace.download = respuesta.nombre_archivo || `movimientos_${codigo}.pdf`;
@@ -218,7 +230,6 @@ const DetalleProductoInventario = () => {
       return;
     }
 
-    // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(correoDestino)) {
       mostrarAlerta('error', 'Por favor ingresa un correo electrónico válido');
@@ -229,7 +240,6 @@ const DetalleProductoInventario = () => {
       setEnviandoEmail(true);
       mostrarAlerta('info', 'Generando y enviando PDF por email...');
       
-      // Enviar con filtro de producto específico
       const respuesta = await inventarioService.enviarPDFMovimientosEmail(
         correoDestino,
         { producto_codigo: codigo }
@@ -373,9 +383,12 @@ const DetalleProductoInventario = () => {
           <Boton onClick={abrirModalEmail} variante="secondary">
             📧 Enviar Email
           </Boton>
-          <Boton onClick={abrirModalMovimiento}>
-            + Registrar Movimiento
-          </Boton>
+          {/* ✅ CAMBIO: Botón visible solo para administradores */}
+          {esAdmin && (
+            <Boton onClick={abrirModalMovimiento}>
+              + Registrar Movimiento
+            </Boton>
+          )}
         </div>
       </div>
 
@@ -392,9 +405,12 @@ const DetalleProductoInventario = () => {
         {movimientos.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">No hay movimientos registrados para este producto</p>
-            <Boton onClick={abrirModalMovimiento} className="mt-4">
-              Registrar Primer Movimiento
-            </Boton>
+            {/* ✅ CAMBIO: Botón visible solo para administradores */}
+            {esAdmin && (
+              <Boton onClick={abrirModalMovimiento} className="mt-4">
+                Registrar Primer Movimiento
+              </Boton>
+            )}
           </div>
         ) : (
           <DataTable
@@ -407,84 +423,86 @@ const DetalleProductoInventario = () => {
         )}
       </Card>
 
-      {/* Modal de Movimiento */}
-      <Modal
-        estaAbierto={modalMovimientoAbierto}
-        onCerrar={cerrarModalMovimiento}
-        titulo={`Registrar Movimiento - ${registro.producto_detalle?.nombre || ''}`}
-        tamaño="md"
-      >
-        <form onSubmit={manejarSubmitMovimiento}>
-          <div className="space-y-4">
-            <div>
-              <label className="form-label">
-                Tipo de Movimiento <span className="text-red-500">*</span>
-              </label>
-              <Select
-                nombre="tipo_movimiento"
-                valor={formularioMovimiento.tipo_movimiento}
+      {/* Modal de Movimiento - Solo para admin */}
+      {esAdmin && (
+        <Modal
+          estaAbierto={modalMovimientoAbierto}
+          onCerrar={cerrarModalMovimiento}
+          titulo={`Registrar Movimiento - ${registro.producto_detalle?.nombre || ''}`}
+          tamaño="md"
+        >
+          <form onSubmit={manejarSubmitMovimiento}>
+            <div className="space-y-4">
+              <div>
+                <label className="form-label">
+                  Tipo de Movimiento <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  nombre="tipo_movimiento"
+                  valor={formularioMovimiento.tipo_movimiento}
+                  onChange={manejarCambioMovimiento}
+                  opciones={[
+                    { valor: 'ENTRADA', etiqueta: '📥 Entrada (Aumenta stock)' },
+                    { valor: 'SALIDA', etiqueta: '📤 Salida (Reduce stock)' },
+                    { valor: 'AJUSTE', etiqueta: '🔧 Ajuste' },
+                  ]}
+                  requerido
+                />
+              </div>
+
+              <FormField
+                etiqueta="Cantidad"
+                nombre="cantidad"
+                tipo="number"
+                placeholder="10"
+                valor={formularioMovimiento.cantidad}
                 onChange={manejarCambioMovimiento}
-                opciones={[
-                  { valor: 'ENTRADA', etiqueta: '📥 Entrada (Aumenta stock)' },
-                  { valor: 'SALIDA', etiqueta: '📤 Salida (Reduce stock)' },
-                  { valor: 'AJUSTE', etiqueta: '🔧 Ajuste' },
-                ]}
                 requerido
               />
-            </div>
 
-            <FormField
-              etiqueta="Cantidad"
-              nombre="cantidad"
-              tipo="number"
-              placeholder="10"
-              valor={formularioMovimiento.cantidad}
-              onChange={manejarCambioMovimiento}
-              requerido
-            />
+              <div>
+                <label className="form-label">Motivo</label>
+                <textarea
+                  name="motivo"
+                  placeholder="Descripción del motivo del movimiento..."
+                  value={formularioMovimiento.motivo}
+                  onChange={manejarCambioMovimiento}
+                  className="form-input"
+                  rows={3}
+                />
+              </div>
 
-            <div>
-              <label className="form-label">Motivo</label>
-              <textarea
-                name="motivo"
-                placeholder="Descripción del motivo del movimiento..."
-                value={formularioMovimiento.motivo}
-                onChange={manejarCambioMovimiento}
-                className="form-input"
-                rows={3}
-              />
-            </div>
-
-            <div className="bg-gray-50 p-4 rounded">
-              <p className="text-sm text-gray-600">
-                <strong>Stock actual:</strong> {registro.cantidad} unidades
-              </p>
-              {formularioMovimiento.cantidad && (
-                <p className="text-sm text-gray-600 mt-2">
-                  <strong>Stock después del movimiento:</strong>{' '}
-                  {formularioMovimiento.tipo_movimiento === 'ENTRADA' 
-                    ? registro.cantidad + parseInt(formularioMovimiento.cantidad || 0)
-                    : formularioMovimiento.tipo_movimiento === 'SALIDA'
-                    ? registro.cantidad - parseInt(formularioMovimiento.cantidad || 0)
-                    : parseInt(formularioMovimiento.cantidad || 0)
-                  } unidades
+              <div className="bg-gray-50 p-4 rounded">
+                <p className="text-sm text-gray-600">
+                  <strong>Stock actual:</strong> {registro.cantidad} unidades
                 </p>
-              )}
+                {formularioMovimiento.cantidad && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    <strong>Stock después del movimiento:</strong>{' '}
+                    {formularioMovimiento.tipo_movimiento === 'ENTRADA' 
+                      ? registro.cantidad + parseInt(formularioMovimiento.cantidad || 0)
+                      : formularioMovimiento.tipo_movimiento === 'SALIDA'
+                      ? registro.cantidad - parseInt(formularioMovimiento.cantidad || 0)
+                      : parseInt(formularioMovimiento.cantidad || 0)
+                    } unidades
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="flex justify-end gap-3 mt-6">
-            <Boton tipo="button" variante="secondary" onClick={cerrarModalMovimiento}>
-              Cancelar
-            </Boton>
-            <Boton tipo="submit">
-              Registrar Movimiento
-            </Boton>
-          </div>
-        </form>
-      </Modal>
+            <div className="flex justify-end gap-3 mt-6">
+              <Boton tipo="button" variante="secondary" onClick={cerrarModalMovimiento}>
+                Cancelar
+              </Boton>
+              <Boton tipo="submit">
+                Registrar Movimiento
+              </Boton>
+            </div>
+          </form>
+        </Modal>
+      )}
 
-      {/* Modal de Enviar Email */}
+      {/* Modal de Enviar Email - Para todos */}
       <Modal
         estaAbierto={modalEmailAbierto}
         onCerrar={cerrarModalEmail}

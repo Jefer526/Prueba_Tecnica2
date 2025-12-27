@@ -36,6 +36,9 @@ const Inventario = () => {
   const [correoDestino, setCorreoDestino] = useState('');
   const [enviandoEmail, setEnviandoEmail] = useState(false);
 
+  // ✅ Obtener si es administrador
+  const esAdmin = esAdministrador();
+
   const [formulario, setFormulario] = useState({
     producto: '',
     empresa: '',
@@ -100,7 +103,6 @@ const Inventario = () => {
     cargarEmpresas();
   }, []);
 
-  // Efecto para filtrar registros
   useEffect(() => {
     filtrarRegistros();
   }, [registros, busqueda, filtroEmpresa, filtroReorden]);
@@ -108,7 +110,6 @@ const Inventario = () => {
   const filtrarRegistros = () => {
     let resultados = [...registros];
 
-    // Filtro por búsqueda (nombre de producto, código o ubicación)
     if (busqueda.trim() !== '') {
       const busquedaLower = busqueda.toLowerCase();
       resultados = resultados.filter(registro => {
@@ -122,12 +123,10 @@ const Inventario = () => {
       });
     }
 
-    // Filtro por empresa
     if (filtroEmpresa !== '') {
       resultados = resultados.filter(registro => registro.empresa === filtroEmpresa);
     }
 
-    // Filtro por reorden
     if (filtroReorden === 'si') {
       resultados = resultados.filter(registro => registro.requiere_reorden);
     } else if (filtroReorden === 'no') {
@@ -184,6 +183,18 @@ const Inventario = () => {
   };
 
   const abrirModal = (registro = null) => {
+    // ✅ Verificar permisos si no hay registro (crear nuevo)
+    if (!registro && !esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para crear registros');
+      return;
+    }
+
+    // ✅ Verificar permisos para editar
+    if (registro && !esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para editar registros');
+      return;
+    }
+
     if (registro) {
       setRegistroSeleccionado(registro);
       setFormulario({
@@ -219,6 +230,12 @@ const Inventario = () => {
   };
 
   const abrirModalMovimiento = (registro) => {
+    // ✅ Verificar permisos antes de abrir modal de movimiento
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para registrar movimientos');
+      return;
+    }
+
     setRegistroSeleccionado(registro);
     setFormularioMovimiento({
       tipo_movimiento: 'ENTRADA',
@@ -257,6 +274,12 @@ const Inventario = () => {
   const manejarSubmit = async (e) => {
     e.preventDefault();
 
+    // ✅ Verificar permisos antes de guardar
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
+      return;
+    }
+
     try {
       if (registroSeleccionado) {
         await inventarioService.actualizarRegistro(registroSeleccionado.id, formulario);
@@ -281,6 +304,12 @@ const Inventario = () => {
 
   const manejarSubmitMovimiento = async (e) => {
     e.preventDefault();
+
+    // ✅ Verificar permisos antes de registrar movimiento
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para registrar movimientos');
+      return;
+    }
 
     try {
       await inventarioService.crearMovimiento({
@@ -309,7 +338,6 @@ const Inventario = () => {
       if (respuesta.url) {
         console.log('URL del PDF:', respuesta.url);
         
-        // Crear enlace temporal para descargar
         const enlace = document.createElement('a');
         enlace.href = respuesta.url;
         enlace.download = respuesta.nombre_archivo || 'inventario.pdf';
@@ -344,7 +372,6 @@ const Inventario = () => {
       if (respuesta.url) {
         console.log('URL del PDF:', respuesta.url);
         
-        // Crear enlace temporal para descargar
         const enlace = document.createElement('a');
         enlace.href = respuesta.url;
         enlace.download = respuesta.nombre_archivo || 'movimientos.pdf';
@@ -385,7 +412,6 @@ const Inventario = () => {
       return;
     }
 
-    // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(correoDestino)) {
       mostrarAlerta('error', 'Por favor ingresa un correo electrónico válido');
@@ -431,7 +457,10 @@ const Inventario = () => {
           <Boton onClick={abrirModalEmail} variante="secondary">
             📧 Enviar Email
           </Boton>
-          <Boton onClick={() => abrirModal()}>+ Nuevo Registro</Boton>
+          {/* ✅ CAMBIO: Botón visible solo para administradores */}
+          {esAdmin && (
+            <Boton onClick={() => abrirModal()}>+ Nuevo Registro</Boton>
+          )}
         </div>
       </div>
 
@@ -443,10 +472,8 @@ const Inventario = () => {
         />
       )}
 
-      {/* Buscador y Filtros */}
       <Card className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Buscador */}
           <div className="md:col-span-2">
             <label className="form-label">🔍 Buscar Producto</label>
             <input
@@ -458,7 +485,6 @@ const Inventario = () => {
             />
           </div>
 
-          {/* Filtro por Empresa */}
           <div>
             <label className="form-label">Filtrar por Empresa</label>
             <Select
@@ -475,7 +501,6 @@ const Inventario = () => {
             />
           </div>
 
-          {/* Filtro por Reorden */}
           <div>
             <label className="form-label">Requiere Reorden</label>
             <Select
@@ -491,7 +516,6 @@ const Inventario = () => {
           </div>
         </div>
 
-        {/* Botón limpiar filtros y contador de resultados */}
         <div className="flex justify-between items-center mt-4 pt-4 border-t">
           <div className="text-sm text-gray-600">
             Mostrando <span className="font-bold">{registrosFiltrados.length}</span> de{' '}
@@ -509,168 +533,172 @@ const Inventario = () => {
         <DataTable
           columnas={columnas}
           datos={registrosFiltrados}
-          onEditar={abrirModal}
-          onVer={abrirModalMovimiento}
-          accionVer="movimiento"
+          {...(esAdmin && { onEditar: abrirModal })}
+          {...(esAdmin && { onVer: abrirModalMovimiento })}
+          {...(esAdmin && { accionVer: 'movimiento' })}
           estaCargando={estaCargando}
         />
       </Card>
 
-      {/* Modal de Crear/Editar Registro */}
-      <Modal
-        estaAbierto={modalAbierto}
-        onCerrar={cerrarModal}
-        titulo={registroSeleccionado ? 'Editar Registro' : 'Nuevo Registro de Inventario'}
-        tamaño="lg"
-      >
-        <form onSubmit={manejarSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="form-label">
-                Producto <span className="text-red-500">*</span>
-              </label>
-              <Select
-                nombre="producto"
-                valor={formulario.producto}
-                onChange={manejarCambio}
-                opciones={productos.map(p => ({
-                  valor: p.codigo,
-                  etiqueta: `${p.nombre} (${p.codigo})`
-                }))}
-                requerido
-                deshabilitado={!!registroSeleccionado}
-              />
-            </div>
-
-            <div>
-              <label className="form-label">
-                Empresa <span className="text-red-500">*</span>
-              </label>
-              <Select
-                nombre="empresa"
-                valor={formulario.empresa}
-                onChange={manejarCambio}
-                opciones={empresas.map(emp => ({
-                  valor: emp.nit,
-                  etiqueta: emp.nombre
-                }))}
-                requerido
-                deshabilitado={!!registroSeleccionado}
-              />
-            </div>
-
-            <FormField
-              etiqueta="Cantidad en Stock"
-              nombre="cantidad"
-              tipo="number"
-              placeholder="100"
-              valor={formulario.cantidad}
-              onChange={manejarCambio}
-              requerido
-            />
-
-            <FormField
-              etiqueta="Cantidad Mínima"
-              nombre="cantidad_minima"
-              tipo="number"
-              placeholder="10"
-              valor={formulario.cantidad_minima}
-              onChange={manejarCambio}
-              requerido
-            />
-
-            <div className="md:col-span-2">
-              <FormField
-                etiqueta="Ubicación en Bodega"
-                nombre="ubicacion_bodega"
-                tipo="text"
-                placeholder="Ej: Pasillo A, Estante 3"
-                valor={formulario.ubicacion_bodega}
-                onChange={manejarCambio}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 mt-6">
-            <Boton tipo="button" variante="secondary" onClick={cerrarModal}>
-              Cancelar
-            </Boton>
-            <Boton tipo="submit">
-              {registroSeleccionado ? 'Actualizar' : 'Crear'}
-            </Boton>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Modal de Movimiento */}
-      <Modal
-        estaAbierto={modalMovimientoAbierto}
-        onCerrar={cerrarModalMovimiento}
-        titulo={`Registrar Movimiento - ${registroSeleccionado?.producto_detalle?.nombre || ''}`}
-        tamaño="md"
-      >
-        <form onSubmit={manejarSubmitMovimiento}>
-          <div className="space-y-4">
-            <div>
-              <label className="form-label">
-                Tipo de Movimiento <span className="text-red-500">*</span>
-              </label>
-              <Select
-                nombre="tipo_movimiento"
-                valor={formularioMovimiento.tipo_movimiento}
-                onChange={manejarCambioMovimiento}
-                opciones={[
-                  { valor: 'ENTRADA', etiqueta: '📥 Entrada (Aumenta stock)' },
-                  { valor: 'SALIDA', etiqueta: '📤 Salida (Reduce stock)' },
-                  { valor: 'AJUSTE', etiqueta: '🔧 Ajuste' },
-                ]}
-                requerido
-              />
-            </div>
-
-            <FormField
-              etiqueta="Cantidad"
-              nombre="cantidad"
-              tipo="number"
-              placeholder="10"
-              valor={formularioMovimiento.cantidad}
-              onChange={manejarCambioMovimiento}
-              requerido
-            />
-
-            <div>
-              <label className="form-label">Motivo</label>
-              <textarea
-                name="motivo"
-                placeholder="Descripción del motivo del movimiento..."
-                value={formularioMovimiento.motivo}
-                onChange={manejarCambioMovimiento}
-                className="form-input"
-                rows={3}
-              />
-            </div>
-
-            {registroSeleccionado && (
-              <div className="bg-gray-50 p-4 rounded">
-                <p className="text-sm text-gray-600">
-                  <strong>Stock actual:</strong> {registroSeleccionado.cantidad} unidades
-                </p>
+      {/* Modal de Crear/Editar Registro - Solo para admin */}
+      {esAdmin && (
+        <Modal
+          estaAbierto={modalAbierto}
+          onCerrar={cerrarModal}
+          titulo={registroSeleccionado ? 'Editar Registro' : 'Nuevo Registro de Inventario'}
+          tamaño="lg"
+        >
+          <form onSubmit={manejarSubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="form-label">
+                  Producto <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  nombre="producto"
+                  valor={formulario.producto}
+                  onChange={manejarCambio}
+                  opciones={productos.map(p => ({
+                    valor: p.codigo,
+                    etiqueta: `${p.nombre} (${p.codigo})`
+                  }))}
+                  requerido
+                  deshabilitado={!!registroSeleccionado}
+                />
               </div>
-            )}
-          </div>
 
-          <div className="flex justify-end gap-3 mt-6">
-            <Boton tipo="button" variante="secondary" onClick={cerrarModalMovimiento}>
-              Cancelar
-            </Boton>
-            <Boton tipo="submit">
-              Registrar Movimiento
-            </Boton>
-          </div>
-        </form>
-      </Modal>
+              <div>
+                <label className="form-label">
+                  Empresa <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  nombre="empresa"
+                  valor={formulario.empresa}
+                  onChange={manejarCambio}
+                  opciones={empresas.map(emp => ({
+                    valor: emp.nit,
+                    etiqueta: emp.nombre
+                  }))}
+                  requerido
+                  deshabilitado={!!registroSeleccionado}
+                />
+              </div>
 
-      {/* Modal de Enviar Email */}
+              <FormField
+                etiqueta="Cantidad en Stock"
+                nombre="cantidad"
+                tipo="number"
+                placeholder="100"
+                valor={formulario.cantidad}
+                onChange={manejarCambio}
+                requerido
+              />
+
+              <FormField
+                etiqueta="Cantidad Mínima"
+                nombre="cantidad_minima"
+                tipo="number"
+                placeholder="10"
+                valor={formulario.cantidad_minima}
+                onChange={manejarCambio}
+                requerido
+              />
+
+              <div className="md:col-span-2">
+                <FormField
+                  etiqueta="Ubicación en Bodega"
+                  nombre="ubicacion_bodega"
+                  tipo="text"
+                  placeholder="Ej: Pasillo A, Estante 3"
+                  valor={formulario.ubicacion_bodega}
+                  onChange={manejarCambio}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <Boton tipo="button" variante="secondary" onClick={cerrarModal}>
+                Cancelar
+              </Boton>
+              <Boton tipo="submit">
+                {registroSeleccionado ? 'Actualizar' : 'Crear'}
+              </Boton>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal de Movimiento - Solo para admin */}
+      {esAdmin && (
+        <Modal
+          estaAbierto={modalMovimientoAbierto}
+          onCerrar={cerrarModalMovimiento}
+          titulo={`Registrar Movimiento - ${registroSeleccionado?.producto_detalle?.nombre || ''}`}
+          tamaño="md"
+        >
+          <form onSubmit={manejarSubmitMovimiento}>
+            <div className="space-y-4">
+              <div>
+                <label className="form-label">
+                  Tipo de Movimiento <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  nombre="tipo_movimiento"
+                  valor={formularioMovimiento.tipo_movimiento}
+                  onChange={manejarCambioMovimiento}
+                  opciones={[
+                    { valor: 'ENTRADA', etiqueta: '📥 Entrada (Aumenta stock)' },
+                    { valor: 'SALIDA', etiqueta: '📤 Salida (Reduce stock)' },
+                    { valor: 'AJUSTE', etiqueta: '🔧 Ajuste' },
+                  ]}
+                  requerido
+                />
+              </div>
+
+              <FormField
+                etiqueta="Cantidad"
+                nombre="cantidad"
+                tipo="number"
+                placeholder="10"
+                valor={formularioMovimiento.cantidad}
+                onChange={manejarCambioMovimiento}
+                requerido
+              />
+
+              <div>
+                <label className="form-label">Motivo</label>
+                <textarea
+                  name="motivo"
+                  placeholder="Descripción del motivo del movimiento..."
+                  value={formularioMovimiento.motivo}
+                  onChange={manejarCambioMovimiento}
+                  className="form-input"
+                  rows={3}
+                />
+              </div>
+
+              {registroSeleccionado && (
+                <div className="bg-gray-50 p-4 rounded">
+                  <p className="text-sm text-gray-600">
+                    <strong>Stock actual:</strong> {registroSeleccionado.cantidad} unidades
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <Boton tipo="button" variante="secondary" onClick={cerrarModalMovimiento}>
+                Cancelar
+              </Boton>
+              <Boton tipo="submit">
+                Registrar Movimiento
+              </Boton>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal de Enviar Email - Para todos */}
       <Modal
         estaAbierto={modalEmailAbierto}
         onCerrar={cerrarModalEmail}

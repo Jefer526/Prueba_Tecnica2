@@ -10,6 +10,7 @@ import Badge from '../atoms/Badge';
 import empresasService from '../../services/empresasService';
 import useAuthStore from '../../stores/useAuthStore';
 
+
 const Empresas = () => {
   const { esAdministrador } = useAuthStore();
   const [empresas, setEmpresas] = useState([]);
@@ -26,6 +27,7 @@ const Empresas = () => {
     telefono: '',
   });
 
+  // ✅ Obtener si es administrador
   const esAdmin = esAdministrador();
 
   useEffect(() => {
@@ -39,12 +41,10 @@ const Empresas = () => {
       
       console.log('Datos recibidos del backend:', datos);
       
-      // Verificar si los datos vienen en una propiedad específica
       const empresasArray = Array.isArray(datos) ? datos : (datos.results || datos.data || []);
       
       console.log('Empresas procesadas:', empresasArray);
       
-      // Mostrar TODAS las empresas (activas e inactivas)
       setEmpresas(empresasArray);
       setEmpresasFiltradas(empresasArray);
     } catch (error) {
@@ -71,6 +71,12 @@ const Empresas = () => {
   };
 
   const abrirModal = (empresa = null) => {
+    // ✅ Verificar permisos antes de abrir modal
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
+      return;
+    }
+
     if (empresa) {
       setEmpresaSeleccionada(empresa);
       setFormulario({
@@ -107,12 +113,17 @@ const Empresas = () => {
   const manejarSubmit = async (e) => {
     e.preventDefault();
 
+    // ✅ Verificar permisos antes de guardar
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
+      return;
+    }
+
     try {
       if (empresaSeleccionada) {
         await empresasService.actualizar(empresaSeleccionada.nit, formulario);
         mostrarAlerta('success', 'Empresa actualizada exitosamente');
       } else {
-        // Asegurar que la nueva empresa se crea como activa
         const datosConEstado = {
           ...formulario,
           activo: true
@@ -122,7 +133,7 @@ const Empresas = () => {
         mostrarAlerta('success', 'Empresa creada exitosamente');
       }
       cerrarModal();
-      await cargarEmpresas(); // Asegurar que espera a cargar
+      await cargarEmpresas();
     } catch (error) {
       console.error('Error al guardar empresa:', error);
       console.error('Error response:', error.response?.data);
@@ -131,6 +142,12 @@ const Empresas = () => {
   };
 
   const manejarEliminar = async (empresa) => {
+    // ✅ Verificar permisos antes de eliminar
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
+      return;
+    }
+
     if (window.confirm(`¿Está seguro de eliminar la empresa ${empresa.nombre}?`)) {
       try {
         console.log('Intentando eliminar empresa:', empresa);
@@ -151,15 +168,20 @@ const Empresas = () => {
   };
 
   const manejarActivar = async (empresa) => {
+    // ✅ Verificar permisos antes de activar/desactivar
+    if (!esAdmin) {
+      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
+      return;
+    }
+
     try {
       console.log('Empresa a activar/desactivar:', empresa);
       
-      // Llamar al endpoint de activar (toggle)
       const resultado = await empresasService.activar(empresa.nit);
       
       console.log('Resultado de activar:', resultado);
       
-      const nuevoEstado = !empresa.activo; // Invertir el estado
+      const nuevoEstado = !empresa.activo;
       mostrarAlerta(
         'success', 
         `Empresa ${nuevoEstado ? 'activada' : 'desactivada'} exitosamente`
@@ -201,8 +223,10 @@ const Empresas = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Empresas</h1>
-        {/* Mostrar botón a todos los usuarios */}
-        <Boton onClick={() => abrirModal()}>+ Nueva Empresa</Boton>
+        {/* ✅ Solo mostrar botón si es administrador */}
+        {esAdmin && (
+          <Boton onClick={() => abrirModal()}>+ Nueva Empresa</Boton>
+        )}
       </div>
 
       {alerta && (
@@ -224,69 +248,71 @@ const Empresas = () => {
         <DataTable
           columnas={columnas}
           datos={empresasFiltradas}
-          onEditar={abrirModal}
-          onEliminar={manejarEliminar}
-          onVer={manejarActivar}
+          onEditar={esAdmin ? abrirModal : undefined}
+          onEliminar={esAdmin ? manejarEliminar : undefined}
+          onVer={esAdmin ? manejarActivar : undefined}
           estaCargando={estaCargando}
         />
       </Card>
 
-      {/* Modal para Crear/Editar */}
-      <Modal
-        estaAbierto={modalAbierto}
-        onCerrar={cerrarModal}
-        titulo={empresaSeleccionada ? 'Editar Empresa' : 'Nueva Empresa'}
-        accionesFooter={
-          <>
-            <Boton variante="secondary" onClick={cerrarModal}>
-              Cancelar
-            </Boton>
-            <Boton onClick={manejarSubmit}>
-              {empresaSeleccionada ? 'Actualizar' : 'Crear'}
-            </Boton>
-          </>
-        }
-      >
-        <form onSubmit={manejarSubmit}>
-          <FormField
-            etiqueta="NIT"
-            nombre="nit"
-            placeholder="900123456-7"
-            valor={formulario.nit}
-            onChange={manejarCambio}
-            deshabilitado={!!empresaSeleccionada}
-            requerido
-          />
+      {/* ✅ Solo renderizar modal si es administrador */}
+      {esAdmin && (
+        <Modal
+          estaAbierto={modalAbierto}
+          onCerrar={cerrarModal}
+          titulo={empresaSeleccionada ? 'Editar Empresa' : 'Nueva Empresa'}
+          accionesFooter={
+            <>
+              <Boton variante="secondary" onClick={cerrarModal}>
+                Cancelar
+              </Boton>
+              <Boton onClick={manejarSubmit}>
+                {empresaSeleccionada ? 'Actualizar' : 'Crear'}
+              </Boton>
+            </>
+          }
+        >
+          <form onSubmit={manejarSubmit}>
+            <FormField
+              etiqueta="NIT"
+              nombre="nit"
+              placeholder="900123456-7"
+              valor={formulario.nit}
+              onChange={manejarCambio}
+              deshabilitado={!!empresaSeleccionada}
+              requerido
+            />
 
-          <FormField
-            etiqueta="Nombre de la Empresa"
-            nombre="nombre"
-            placeholder="Empresa S.A.S"
-            valor={formulario.nombre}
-            onChange={manejarCambio}
-            requerido
-          />
+            <FormField
+              etiqueta="Nombre de la Empresa"
+              nombre="nombre"
+              placeholder="Empresa S.A.S"
+              valor={formulario.nombre}
+              onChange={manejarCambio}
+              requerido
+            />
 
-          <FormField
-            etiqueta="Dirección"
-            nombre="direccion"
-            placeholder="Calle 123 #45-67"
-            valor={formulario.direccion}
-            onChange={manejarCambio}
-            requerido
-          />
+            <FormField
+              etiqueta="Dirección"
+              nombre="direccion"
+              placeholder="Calle 123 #45-67"
+              valor={formulario.direccion}
+              onChange={manejarCambio}
+              requerido
+            />
 
-          <FormField
-            etiqueta="Teléfono"
-            nombre="telefono"
-            tipo="tel"
-            placeholder="3001234567"
-            valor={formulario.telefono}
-            onChange={manejarCambio}
-            requerido
-          />
-        </form>
-      </Modal>
+            <FormField
+              etiqueta="Teléfono"
+              nombre="telefono"
+              tipo="tel"
+              placeholder="3001234567"
+              valor={formulario.telefono}
+              onChange={manejarCambio}
+              requerido
+            />
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };
