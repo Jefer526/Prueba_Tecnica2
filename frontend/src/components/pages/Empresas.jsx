@@ -10,7 +10,6 @@ import Badge from '../atoms/Badge';
 import empresasService from '../../services/empresasService';
 import useAuthStore from '../../stores/useAuthStore';
 
-
 const Empresas = () => {
   const { esAdministrador } = useAuthStore();
   const [empresas, setEmpresas] = useState([]);
@@ -27,7 +26,6 @@ const Empresas = () => {
     telefono: '',
   });
 
-  // ✅ Obtener si es administrador
   const esAdmin = esAdministrador();
 
   useEffect(() => {
@@ -39,17 +37,12 @@ const Empresas = () => {
       setEstaCargando(true);
       const datos = await empresasService.obtenerTodas();
       
-      console.log('Datos recibidos del backend:', datos);
-      
       const empresasArray = Array.isArray(datos) ? datos : (datos.results || datos.data || []);
-      
-      console.log('Empresas procesadas:', empresasArray);
       
       setEmpresas(empresasArray);
       setEmpresasFiltradas(empresasArray);
     } catch (error) {
-      console.error('Error completo al cargar empresas:', error);
-      console.error('Error response:', error.response?.data);
+      console.error('Error al cargar empresas:', error);
       mostrarAlerta('error', 'Error al cargar empresas');
     } finally {
       setEstaCargando(false);
@@ -71,7 +64,6 @@ const Empresas = () => {
   };
 
   const abrirModal = (empresa = null) => {
-    // ✅ Verificar permisos antes de abrir modal
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
       return;
@@ -113,36 +105,69 @@ const Empresas = () => {
   const manejarSubmit = async (e) => {
     e.preventDefault();
 
-    // ✅ Verificar permisos antes de guardar
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
       return;
     }
 
     try {
+      // ✅ Limpiar y validar datos antes de enviar
+      const datosLimpios = {
+        nit: formulario.nit.trim(),
+        nombre: formulario.nombre.trim(),
+        direccion: formulario.direccion.trim(),
+        telefono: formulario.telefono.trim(),
+      };
+
+      // Validación básica en frontend
+      if (!datosLimpios.nit || !datosLimpios.nombre || !datosLimpios.direccion || !datosLimpios.telefono) {
+        mostrarAlerta('error', 'Todos los campos son obligatorios');
+        return;
+      }
+
       if (empresaSeleccionada) {
-        await empresasService.actualizar(empresaSeleccionada.nit, formulario);
+        await empresasService.actualizar(empresaSeleccionada.nit, datosLimpios);
         mostrarAlerta('success', 'Empresa actualizada exitosamente');
       } else {
         const datosConEstado = {
-          ...formulario,
+          ...datosLimpios,
           activo: true
         };
-        const nuevaEmpresa = await empresasService.crear(datosConEstado);
-        console.log('Empresa creada:', nuevaEmpresa);
+        await empresasService.crear(datosConEstado);
         mostrarAlerta('success', 'Empresa creada exitosamente');
       }
+      
       cerrarModal();
       await cargarEmpresas();
     } catch (error) {
       console.error('Error al guardar empresa:', error);
       console.error('Error response:', error.response?.data);
-      mostrarAlerta('error', error.response?.data?.detail || 'Error al guardar empresa');
+      
+      // ✅ Mejorar manejo de errores
+      let mensajeError = 'Error al guardar empresa';
+      
+      if (error.response?.data) {
+        const errores = error.response.data;
+        
+        // Si es un objeto con errores por campo
+        if (typeof errores === 'object' && !errores.detail) {
+          const mensajes = Object.entries(errores).map(([campo, mensajes]) => {
+            const mensajesCampo = Array.isArray(mensajes) ? mensajes.join(', ') : mensajes;
+            return `${campo}: ${mensajesCampo}`;
+          });
+          mensajeError = mensajes.join('\n');
+        } else if (errores.detail) {
+          mensajeError = errores.detail;
+        } else if (errores.error) {
+          mensajeError = errores.error;
+        }
+      }
+      
+      mostrarAlerta('error', mensajeError);
     }
   };
 
   const manejarEliminar = async (empresa) => {
-    // ✅ Verificar permisos antes de eliminar
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
       return;
@@ -150,14 +175,11 @@ const Empresas = () => {
 
     if (window.confirm(`¿Está seguro de eliminar la empresa ${empresa.nombre}?`)) {
       try {
-        console.log('Intentando eliminar empresa:', empresa);
         await empresasService.eliminar(empresa.nit);
         mostrarAlerta('success', 'Empresa eliminada exitosamente');
         await cargarEmpresas();
       } catch (error) {
         console.error('Error al eliminar empresa:', error);
-        console.error('Error response:', error.response?.data);
-        console.error('Error status:', error.response?.status);
         
         const mensajeError = error.response?.data?.detail 
           || error.response?.data?.error
@@ -168,18 +190,13 @@ const Empresas = () => {
   };
 
   const manejarActivar = async (empresa) => {
-    // ✅ Verificar permisos antes de activar/desactivar
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
       return;
     }
 
     try {
-      console.log('Empresa a activar/desactivar:', empresa);
-      
-      const resultado = await empresasService.activar(empresa.nit);
-      
-      console.log('Resultado de activar:', resultado);
+      await empresasService.activar(empresa.nit);
       
       const nuevoEstado = !empresa.activo;
       mostrarAlerta(
@@ -190,7 +207,6 @@ const Empresas = () => {
       await cargarEmpresas();
     } catch (error) {
       console.error('Error al cambiar estado de la empresa:', error);
-      console.error('Error response:', error.response?.data);
       mostrarAlerta('error', 'Error al cambiar estado de la empresa');
     }
   };
@@ -223,7 +239,6 @@ const Empresas = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Empresas</h1>
-        {/* ✅ Solo mostrar botón si es administrador */}
         {esAdmin && (
           <Boton onClick={() => abrirModal()}>+ Nueva Empresa</Boton>
         )}
@@ -248,39 +263,29 @@ const Empresas = () => {
         <DataTable
           columnas={columnas}
           datos={empresasFiltradas}
-          onEditar={esAdmin ? abrirModal : undefined}
-          onEliminar={esAdmin ? manejarEliminar : undefined}
-          onVer={esAdmin ? manejarActivar : undefined}
+          {...(esAdmin && { onEditar: abrirModal })}
+          {...(esAdmin && { onEliminar: manejarEliminar })}
+          {...(esAdmin && { onVer: manejarActivar })}
           estaCargando={estaCargando}
         />
       </Card>
 
-      {/* ✅ Solo renderizar modal si es administrador */}
       {esAdmin && (
         <Modal
           estaAbierto={modalAbierto}
           onCerrar={cerrarModal}
           titulo={empresaSeleccionada ? 'Editar Empresa' : 'Nueva Empresa'}
-          accionesFooter={
-            <>
-              <Boton variante="secondary" onClick={cerrarModal}>
-                Cancelar
-              </Boton>
-              <Boton onClick={manejarSubmit}>
-                {empresaSeleccionada ? 'Actualizar' : 'Crear'}
-              </Boton>
-            </>
-          }
         >
           <form onSubmit={manejarSubmit}>
             <FormField
               etiqueta="NIT"
               nombre="nit"
-              placeholder="900123456-7"
+              placeholder="900123456 (solo números)"
               valor={formulario.nit}
               onChange={manejarCambio}
               deshabilitado={!!empresaSeleccionada}
               requerido
+              ayuda="Ingrese el NIT sin guiones ni espacios (9-10 dígitos)"
             />
 
             <FormField
@@ -305,11 +310,22 @@ const Empresas = () => {
               etiqueta="Teléfono"
               nombre="telefono"
               tipo="tel"
-              placeholder="3001234567"
+              placeholder="3001234567 (solo números)"
               valor={formulario.telefono}
               onChange={manejarCambio}
               requerido
+              ayuda="Ingrese el teléfono sin espacios ni guiones (7-15 dígitos)"
             />
+
+            {/* ✅ CAMBIO: Botones dentro del form sin onClick, solo type */}
+            <div className="flex justify-end gap-3 mt-6">
+              <Boton tipo="button" variante="secondary" onClick={cerrarModal}>
+                Cancelar
+              </Boton>
+              <Boton tipo="submit">
+                {empresaSeleccionada ? 'Actualizar' : 'Crear'}
+              </Boton>
+            </div>
           </form>
         </Modal>
       )}
