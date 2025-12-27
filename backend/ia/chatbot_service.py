@@ -1,4 +1,5 @@
 import json
+import unicodedata
 from typing import List, Dict, Any
 from django.conf import settings
 from django.db import models
@@ -14,6 +15,31 @@ class ChatbotService:
     
     def __init__(self):
         self.model = "chatbot-local-v1"
+    
+    def normalizar_texto(self, texto: str) -> str:
+        """Elimina tildes y normaliza texto para búsquedas"""
+        texto_nfd = unicodedata.normalize('NFD', texto)
+        texto_sin_tildes = ''.join(c for c in texto_nfd if unicodedata.category(c) != 'Mn')
+        return texto_sin_tildes
+    
+    def normalizar_termino_busqueda(self, termino: str) -> str:
+        """Normaliza términos de búsqueda usando sinónimos comunes"""
+        sinonimos = {
+            'laptop': 'portatil',
+            'laptops': 'portatil',
+            'computador': 'portatil',
+            'computadora': 'portatil',
+            'pc portatil': 'portatil',
+            'notebook': 'portatil',
+            'mouse': 'raton',
+            'raton': 'raton',
+        }
+        
+        termino_lower = termino.lower().strip()
+        if termino_lower in sinonimos:
+            return sinonimos[termino_lower]
+        
+        return termino
     
     def consultar_stock(self, producto_codigo: str = None) -> Dict[str, Any]:
         """Consulta el stock de productos"""
@@ -49,7 +75,9 @@ class ChatbotService:
         except Exception as e:
             return {
                 'exito': False,
-                'error': str(e)
+                'error': str(e),
+                'total_productos': 0,
+                'productos': []
             }
     
     def productos_bajo_stock(self) -> Dict[str, Any]:
@@ -80,34 +108,47 @@ class ChatbotService:
         except Exception as e:
             return {
                 'exito': False,
-                'error': str(e)
+                'error': str(e),
+                'total_criticos': 0,
+                'productos': []
             }
     
     def buscar_producto(self, termino: str) -> Dict[str, Any]:
-        """Busca productos por nombre o código"""
+        """Busca productos por nombre o código (insensible a tildes)"""
         try:
-            productos = Producto.objects.filter(
-                activo=True
-            ).filter(
-                models.Q(nombre__icontains=termino) |
-                models.Q(codigo__icontains=termino)
-            )[:10]
+            termino_normalizado = self.normalizar_texto(termino).lower()
+            # Normalizar con sinónimos
+            termino_normalizado = self.normalizar_termino_busqueda(termino_normalizado)
+            
+            productos = Producto.objects.filter(activo=True)
             
             resultados = []
             for prod in productos:
-                registro = RegistroInventario.objects.filter(
-                    producto=prod,
-                    activo=True
-                ).first()
+                nombre_normalizado = self.normalizar_texto(prod.nombre).lower()
+                codigo_normalizado = self.normalizar_texto(prod.codigo).lower()
                 
-                resultados.append({
-                    'codigo': prod.codigo,
-                    'nombre': prod.nombre,
-                    'descripcion': prod.descripcion or 'Sin descripción',
-                    'precio_usd': float(prod.precio_usd),
-                    'stock': registro.cantidad if registro else 0,
-                    'tiene_stock_bajo': registro.requiere_reorden if registro else False
-                })
+                if (termino_normalizado in nombre_normalizado or 
+                    termino_normalizado in codigo_normalizado):
+                    
+                    registro = RegistroInventario.objects.filter(
+                        producto=prod,
+                        activo=True
+                    ).first()
+                    
+                    # Manejar caracteristicas vacías
+                    caracteristicas = prod.caracteristicas.strip() if prod.caracteristicas else ''
+                    
+                    resultados.append({
+                        'codigo': prod.codigo,
+                        'nombre': prod.nombre,
+                        'descripcion': caracteristicas or 'Sin descripción',
+                        'precio_usd': float(prod.precio_usd),
+                        'stock': registro.cantidad if registro else 0,
+                        'tiene_stock_bajo': registro.requiere_reorden if registro else False
+                    })
+                    
+                    if len(resultados) >= 10:
+                        break
             
             return {
                 'exito': True,
@@ -117,9 +158,11 @@ class ChatbotService:
         except Exception as e:
             return {
                 'exito': False,
-                'error': str(e)
+                'error': str(e),
+                'total_encontrados': 0,
+                'productos': []
             }
-    
+
     def historial_movimientos(self, producto_codigo: str, limite: int = 10) -> Dict[str, Any]:
         """Obtiene el historial de movimientos de un producto"""
         try:
@@ -149,7 +192,10 @@ class ChatbotService:
         except Exception as e:
             return {
                 'exito': False,
-                'error': str(e)
+                'error': str(e),
+                'producto_codigo': producto_codigo,
+                'total_movimientos': 0,
+                'movimientos': []
             }
     
     def estadisticas_inventario(self) -> Dict[str, Any]:
@@ -190,7 +236,15 @@ class ChatbotService:
         except Exception as e:
             return {
                 'exito': False,
-                'error': str(e)
+                'error': str(e),
+                'estadisticas': {
+                    'total_productos': 0,
+                    'productos_bajo_stock': 0,
+                    'valor_total_inventario': 0,
+                    'total_movimientos': 0,
+                    'entradas_este_mes': 0,
+                    'salidas_este_mes': 0
+                }
             }
     
     def ejecutar_funcion(self, nombre_funcion: str, argumentos: Dict[str, Any]) -> Dict[str, Any]:
@@ -215,15 +269,11 @@ class ChatbotService:
     def generar_respuesta(self, mensajes: List[Dict[str, str]]) -> Dict[str, Any]:
         """Genera respuesta usando lógica local (detección de palabras clave)"""
         try:
-            # Obtener último mensaje del usuario
             contenido_usuario = mensajes[-1]['content'].lower() if mensajes else ""
-            
             acciones_ejecutadas = []
             respuesta_final = ""
             
-            # DETECCIÓN INTELIGENTE DE INTENCIONES (ORDEN IMPORTANTE)
-            
-            # 1. STOCK BAJO (máxima prioridad)
+            # Detectar productos bajo stock
             if any(palabra in contenido_usuario for palabra in ['bajo', 'bajos', 'crítico', 'críticos', 'reorden', 'falta', 'mínimo']):
                 resultado = self.productos_bajo_stock()
                 if resultado['exito']:
@@ -242,8 +292,10 @@ class ChatbotService:
                     else:
                         respuesta_final = "✅ ¡Buenas noticias! No hay productos con stock bajo en este momento."
                         acciones_ejecutadas.append('productos_bajo_stock')
+                else:
+                    respuesta_final = f"❌ Error al consultar productos: {resultado.get('error', 'Error desconocido')}"
             
-            # 2. ESTADÍSTICAS
+            # Detectar estadísticas
             elif any(palabra in contenido_usuario for palabra in ['estadística', 'estadísticas', 'total', 'cuánto', 'cuantos', 'resumen']):
                 resultado = self.estadisticas_inventario()
                 if resultado['exito']:
@@ -257,13 +309,12 @@ class ChatbotService:
                     respuesta_final += f"📥 Entradas: {stats['entradas_este_mes']}\n"
                     respuesta_final += f"📤 Salidas: {stats['salidas_este_mes']}\n"
                     acciones_ejecutadas.append('estadisticas_inventario')
+                else:
+                    respuesta_final = f"❌ Error al obtener estadísticas: {resultado.get('error', 'Error desconocido')}"
             
-            # 3. BUSCAR PRODUCTO ESPECÍFICO (CORREGIDO)
+            # Detectar búsqueda de productos
             elif any(palabra in contenido_usuario for palabra in ['buscar', 'busca', 'encuentra']):
-                # Palabras a eliminar del término de búsqueda
                 palabras_eliminar = ['buscar', 'busca', 'encuentra', 'producto', 'el', 'la', 'los', 'las', 'un', 'una', 'me', 'por', 'favor']
-                
-                # Dividir en palabras y filtrar
                 palabras = contenido_usuario.split()
                 termino_palabras = [p for p in palabras if p not in palabras_eliminar]
                 termino = ' '.join(termino_palabras).strip()
@@ -272,7 +323,8 @@ class ChatbotService:
                     resultado = self.buscar_producto(termino)
                     if resultado['exito'] and resultado['total_encontrados'] > 0:
                         productos = resultado['productos']
-                        respuesta_final = f"🔍 Encontré {resultado['total_encontrados']} producto(s) que coinciden con '{termino}':\n\n"
+                        termino_mostrar = self.normalizar_termino_busqueda(termino)
+                        respuesta_final = f"🔍 Encontré {resultado['total_encontrados']} producto(s) relacionado(s) con '{termino}':\n\n"
                         for i, p in enumerate(productos, 1):
                             stock_icon = "✅" if p['stock'] > 0 and not p['tiene_stock_bajo'] else "⚠️"
                             respuesta_final += f"{i}. {stock_icon} **{p['nombre']}** ({p['codigo']})\n"
@@ -283,14 +335,16 @@ class ChatbotService:
                                 respuesta_final += f"   • ⚠️ **Stock bajo - Requiere reorden**\n"
                             respuesta_final += "\n"
                         acciones_ejecutadas.append('buscar_producto')
-                    else:
+                    elif resultado['exito']:
                         respuesta_final = f"❌ No encontré productos que coincidan con '{termino}'.\n\n" \
                                         "Intenta con otro nombre o código de producto."
+                    else:
+                        respuesta_final = f"❌ Error al buscar productos: {resultado.get('error', 'Error desconocido')}"
                 else:
                     respuesta_final = "Para buscar un producto, dime su nombre o código.\n\n" \
                                     "Por ejemplo: 'Buscar laptop' o 'Buscar PO001'"
             
-            # 4. CONSULTAR TODO EL INVENTARIO
+            # Detectar listado completo
             elif any(palabra in contenido_usuario for palabra in ['inventario', 'todos', 'lista']):
                 resultado = self.consultar_stock()
                 if resultado['exito']:
@@ -303,8 +357,10 @@ class ChatbotService:
                         respuesta_final += f"   • Empresa: {p['empresa']}\n"
                         respuesta_final += f"   • Ubicación: {p['ubicacion']}\n\n"
                     acciones_ejecutadas.append('consultar_stock')
+                else:
+                    respuesta_final = f"❌ Error al consultar inventario: {resultado.get('error', 'Error desconocido')}"
             
-            # 5. SALUDOS
+            # Saludos
             elif any(palabra in contenido_usuario for palabra in ['hola', 'buenos', 'buenas', 'hey', 'qué tal']):
                 respuesta_final = "¡Hola! 👋 Soy tu asistente de inventario.\n\n" \
                                 "Puedo ayudarte con:\n" \
@@ -314,7 +370,7 @@ class ChatbotService:
                                 "📈 Revisar el listado completo\n\n" \
                                 "¿En qué puedo ayudarte?"
             
-            # 6. RESPUESTA POR DEFECTO
+            # Mensaje por defecto
             else:
                 respuesta_final = "🤔 No estoy seguro de cómo ayudarte con eso.\n\n" \
                                 "Puedo ayudarte a:\n" \
@@ -334,5 +390,7 @@ class ChatbotService:
             return {
                 'exito': False,
                 'error': f'Error al generar respuesta: {str(e)}',
-                'respuesta': 'Lo siento, ha ocurrido un error al procesar tu consulta. Por favor, intenta de nuevo.'
+                'respuesta': 'Lo siento, ha ocurrido un error al procesar tu consulta. Por favor, intenta de nuevo.',
+                'acciones_ejecutadas': [],
+                'tokens_usados': 0
             }
