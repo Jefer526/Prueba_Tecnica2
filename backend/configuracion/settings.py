@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     'productos',
     'inventario',
     'autenticacion',
-    'inteligencia_artificial',
+    'ia',
     'blockchain',
 ]
 
@@ -181,8 +181,8 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = config('EMAIL_HOST_USER')
 
-# OpenAI Configuration
-OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
+# Google Gemini Configuration
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 
 # Blockchain Configuration
 INFURA_URL = config('INFURA_URL', default='')
@@ -190,3 +190,4 @@ CLAVE_PRIVADA_BLOCKCHAIN = config('CLAVE_PRIVADA_BLOCKCHAIN', default='')
 
 # Usuario personalizado
 AUTH_USER_MODEL = 'autenticacion.Usuario'
+

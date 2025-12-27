@@ -11,7 +11,7 @@ from rest_framework.routers import DefaultRouter
 from empresas.views import EmpresaViewSet
 from productos.views import ProductoViewSet
 from inventario.views import InventarioViewSet, MovimientoInventarioViewSet
-from inteligencia_artificial.views import PrediccionPrecioViewSet, ChatbotViewSet, AnalisisInventarioViewSet
+# ELIMINADO: from inteligencia_artificial.views import ...
 from blockchain.views import TransaccionBlockchainViewSet, AuditoriaBlockchainViewSet
 
 # Router único para toda la aplicación
@@ -22,9 +22,9 @@ router.register(r'empresas', EmpresaViewSet, basename='empresa')
 router.register(r'productos', ProductoViewSet, basename='producto')
 router.register(r'inventario/registros', InventarioViewSet, basename='registro-inventario')
 router.register(r'inventario/movimientos', MovimientoInventarioViewSet, basename='movimiento-inventario')
-router.register(r'ia/predicciones', PrediccionPrecioViewSet, basename='prediccion-precio')
-router.register(r'ia/chatbot', ChatbotViewSet, basename='chatbot')
-router.register(r'ia/analisis', AnalisisInventarioViewSet, basename='analisis-inventario')
+# ELIMINADO: router.register(r'ia/predicciones', ...)
+# ELIMINADO: router.register(r'ia/chatbot', ...)
+# ELIMINADO: router.register(r'ia/analisis', ...)
 router.register(r'blockchain/transacciones', TransaccionBlockchainViewSet, basename='transaccion-blockchain')
 router.register(r'blockchain/auditorias', AuditoriaBlockchainViewSet, basename='auditoria-blockchain')
 
@@ -51,9 +51,8 @@ def api_root(request):
                 'enviar_email': '/api/inventario/registros/enviar_pdf_email/',
             },
             'inteligencia_artificial': {
-                'predicciones': '/api/ia/predicciones/',
-                'chatbot': '/api/ia/chatbot/',
-                'analisis': '/api/ia/analisis/',
+                'chat': '/api/ia/chat/',
+                'conversaciones': '/api/ia/conversaciones/',
             },
             'blockchain': {
                 'transacciones': '/api/blockchain/transacciones/',
@@ -75,6 +74,9 @@ urlpatterns = [
     
     # Todos los ViewSets registrados en el router
     path('api/', include(router.urls)),
+
+    # IA - Chatbot
+    path('api/ia/', include('ia.urls')),
 ]
 
 # Servir archivos media en desarrollo
