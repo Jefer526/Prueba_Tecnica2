@@ -1,5 +1,6 @@
 """
 Configuración de Django para el proyecto Lite Thinking
+Arquitectura Limpia
 """
 
 from pathlib import Path
@@ -31,15 +32,13 @@ INSTALLED_APPS = [
     # Apps de terceros
     'rest_framework',
     'rest_framework_simplejwt',
-
     
-    # Apps del proyecto
-    'empresas',
-    'productos',
-    'inventario',
-    'autenticacion',
-    'ia',
-    'blockchain',
+    # Apps del proyecto - Arquitectura Limpia
+    'infraestructura.django_orm',
+    
+    # Apps especiales (comentar si dan error)
+    # 'ia',
+    # 'blockchain',
 ]
 
 MIDDLEWARE = [
@@ -142,7 +141,6 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-
 # Configuración de CORS
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
@@ -188,6 +186,10 @@ GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 INFURA_URL = config('INFURA_URL', default='')
 CLAVE_PRIVADA_BLOCKCHAIN = config('CLAVE_PRIVADA_BLOCKCHAIN', default='')
 
-# Usuario personalizado
-AUTH_USER_MODEL = 'autenticacion.Usuario'
-
+# ========================================
+# IMPORTANTE: Usuario personalizado comentado
+# Por ahora usamos el User de Django por defecto
+# Más adelante crearemos nuestro modelo de Usuario
+# en la capa de dominio
+# ========================================
+# AUTH_USER_MODEL = 'autenticacion.Usuario'  # ← COMENTADO
