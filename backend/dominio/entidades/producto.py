@@ -156,20 +156,20 @@ class Producto:
             raise ValueError(f"Moneda no soportada: {moneda}")
     
     def to_dict(self) -> dict:
-        """Convierte la entidad a diccionario para persistencia"""
+        """Convierte la entidad a diccionario"""
         return {
             'id': self.id,
             'codigo': self.codigo,
             'nombre': self.nombre,
             'descripcion': self.descripcion,
             'precio_usd': float(self.precio_usd),
-            'precio_cop': float(self.precio_cop) if self.precio_cop else None,
-            'precio_eur': float(self.precio_eur) if self.precio_eur else None,
+            'precio_cop': float(self.precio_cop) if self.precio_cop else 0.0,
+            'precio_eur': float(self.precio_eur) if self.precio_eur else 0.0,
             'categoria': self.categoria.value,
             'empresa_id': self.empresa_id,
             'activo': self.activo,
-            'fecha_creacion': self.fecha_creacion.isoformat() if self.fecha_creacion else None,
-            'fecha_actualizacion': self.fecha_actualizacion.isoformat() if self.fecha_actualizacion else None
+            'fecha_creacion': self.fecha_creacion,
+            'fecha_actualizacion': self.fecha_actualizacion,
         }
     
     @classmethod
@@ -189,7 +189,7 @@ class Producto:
             fecha_creacion=datetime.fromisoformat(data['fecha_creacion']) if data.get('fecha_creacion') else datetime.now(),
             fecha_actualizacion=datetime.fromisoformat(data['fecha_actualizacion']) if data.get('fecha_actualizacion') else None
         )
-    
+
     def __str__(self) -> str:
         return f"Producto({self.codigo} - {self.nombre})"
     

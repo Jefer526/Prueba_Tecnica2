@@ -320,27 +320,24 @@ class IRepositorioMovimiento(ABC):
 # === REPOSITORIO DE USUARIO ===
 
 class IRepositorioUsuario(ABC):
-    """
-    Interfaz que define el contrato para el repositorio de Usuario
-    """
+    """Interfaz para el repositorio de Usuario"""
     
     @abstractmethod
-    def obtener_por_id(self, usuario_id: int) -> Optional['Usuario']:
-        """
-        Obtiene un usuario por su ID
-        """
+    def guardar(self, usuario) -> any:
+        """Guarda un nuevo usuario"""
         pass
     
     @abstractmethod
-    def obtener_por_email(self, email: str) -> Optional['Usuario']:
-        """
-        Obtiene un usuario por su email
-        """
+    def obtener_por_id(self, usuario_id: int) -> Optional[dict]:
+        """Obtiene un usuario por ID"""
+        pass
+    
+    @abstractmethod
+    def obtener_por_email(self, email: str) -> Optional[dict]:
+        """Obtiene un usuario por email"""
         pass
     
     @abstractmethod
     def verificar_permisos(self, usuario_id: int, permiso: str) -> bool:
-        """
-        Verifica si un usuario tiene un permiso específico
-        """
+        """Verifica si un usuario tiene un permiso específico"""
         pass

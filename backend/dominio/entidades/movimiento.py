@@ -105,18 +105,18 @@ class MovimientoInventario:
         return f"{tipo_str} de {self.cantidad} unidades"
     
     def to_dict(self) -> dict:
-        """Convierte la entidad a diccionario para persistencia"""
+        """Convierte la entidad a diccionario"""
         return {
             'id': self.id,
-            'tipo_movimiento': self.tipo_movimiento.value,
-            'producto_id': self.producto_id,
-            'cantidad': self.cantidad,
-            'empresa_id': self.empresa_id,
-            'usuario_id': self.usuario_id,
-            'observaciones': self.observaciones,
-            'fecha_movimiento': self.fecha_movimiento.isoformat() if self.fecha_movimiento else None
+            'nombre': self.nombre,
+            'nit': self.nit,
+            'direccion': self.direccion,
+            'telefono': self.telefono,
+            'email': self.email,
+            'activo': self.activo,
+            'fecha_creacion': self.fecha_creacion,
+            'fecha_actualizacion': self.fecha_actualizacion,
         }
-    
     @classmethod
     def from_dict(cls, data: dict) -> 'MovimientoInventario':
         """Crea una entidad desde un diccionario"""

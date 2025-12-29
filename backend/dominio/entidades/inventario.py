@@ -182,7 +182,7 @@ class RegistroInventario:
             return "ALTO"
     
     def to_dict(self) -> dict:
-        """Convierte la entidad a diccionario para persistencia"""
+        """Convierte la entidad a diccionario"""
         return {
             'id': self.id,
             'producto_id': self.producto_id,
@@ -191,7 +191,7 @@ class RegistroInventario:
             'stock_minimo': self.stock_minimo,
             'stock_maximo': self.stock_maximo,
             'requiere_reorden': self.requiere_reorden,
-            'ultima_actualizacion': self.ultima_actualizacion.isoformat() if self.ultima_actualizacion else None
+            'ultima_actualizacion': self.ultima_actualizacion,
         }
     
     @classmethod

@@ -107,7 +107,7 @@ class Empresa:
         return self.activo
     
     def to_dict(self) -> dict:
-        """Convierte la entidad a diccionario para persistencia"""
+        """Convierte la entidad a diccionario"""
         return {
             'id': self.id,
             'nombre': self.nombre,
@@ -116,8 +116,8 @@ class Empresa:
             'telefono': self.telefono,
             'email': self.email,
             'activo': self.activo,
-            'fecha_creacion': self.fecha_creacion.isoformat() if self.fecha_creacion else None,
-            'fecha_actualizacion': self.fecha_actualizacion.isoformat() if self.fecha_actualizacion else None
+            'fecha_creacion': self.fecha_creacion,
+            'fecha_actualizacion': self.fecha_actualizacion,
         }
     
     @classmethod

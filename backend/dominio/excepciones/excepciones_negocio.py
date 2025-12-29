@@ -231,3 +231,14 @@ class FormatoInvalido(ExcepcionDominio):
             mensaje=f"Formato inválido en '{campo}'. Se esperaba: {formato_esperado}",
             codigo_error="FORMATO_INVALIDO"
         )
+
+# ==================== AUTENTICACIÓN ====================
+
+class EmailDuplicado(ExcepcionDominio):
+    """Se lanza cuando se intenta registrar un email que ya existe"""
+    pass
+
+
+class CredencialesInvalidas(ExcepcionDominio):
+    """Se lanza cuando las credenciales de login son inválidas"""
+    pass

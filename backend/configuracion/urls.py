@@ -1,9 +1,8 @@
 """
 URLs principales - Arquitectura Limpia
-Lite Thinking - Clean Architecture
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.decorators import api_view
@@ -20,9 +19,28 @@ def api_root(request):
         'endpoints': {
             'admin': '/admin/',
             'api': {
-                'empresas': '/api/empresas/ (próximamente)',
-                'productos': '/api/productos/ (próximamente)',
-                'inventario': '/api/inventario/ (próximamente)',
+                'empresas': '/api/empresas/',
+                'productos': '/api/productos/',
+                'inventario': '/api/inventario/',
+                'movimientos': '/api/movimientos/',
+            },
+            'docs': {
+                'empresas': {
+                    'listar': 'GET /api/empresas/',
+                    'crear': 'POST /api/empresas/',
+                    'detalle': 'GET /api/empresas/{id}/',
+                },
+                'productos': {
+                    'listar': 'GET /api/productos/',
+                    'crear': 'POST /api/productos/',
+                    'detalle': 'GET /api/productos/{id}/',
+                },
+                'inventario': {
+                    'listar': 'GET /api/inventario/',
+                },
+                'movimientos': {
+                    'crear': 'POST /api/movimientos/',
+                }
             }
         }
     })
@@ -34,6 +52,9 @@ urlpatterns = [
     
     # API Root
     path('api/', api_root, name='api-root'),
+    
+    # API de Arquitectura Limpia
+    path('api/', include('presentacion.api.urls')),
 ]
 
 # Servir archivos media y static en desarrollo
