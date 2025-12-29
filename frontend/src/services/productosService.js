@@ -13,49 +13,47 @@ const productosService = {
     return respuesta.data;
   },
 
-  // Crear producto
+  // Crear producto (backend genera código automáticamente)
   crear: async (datos) => {
-    const respuesta = await api.post('/productos/', datos, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const respuesta = await api.post('/productos/', datos);
     return respuesta.data;
   },
 
-  // Actualizar producto
+  // Actualizar producto (usa ID)
   actualizar: async (id, datos) => {
-    const respuesta = await api.put(`/productos/${id}/`, datos, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const respuesta = await api.put(`/productos/${id}/`, datos);
     return respuesta.data;
   },
 
-  // Eliminar (desactivar) producto
+  // Actualización parcial
+  actualizarParcial: async (id, datos) => {
+    const respuesta = await api.patch(`/productos/${id}/`, datos);
+    return respuesta.data;
+  },
+
+  // Eliminar (hard delete) producto
   eliminar: async (id) => {
     const respuesta = await api.delete(`/productos/${id}/`);
     return respuesta.data;
   },
 
-  // Activar producto
+  // ⭐ Activar producto
   activar: async (id) => {
     const respuesta = await api.post(`/productos/${id}/activar/`);
     return respuesta.data;
   },
 
-  // Obtener productos por empresa
-  obtenerPorEmpresa: async (nit) => {
-    const respuesta = await api.get('/productos/por_empresa/', {
-      params: { nit },
-    });
+  // ⭐ Inactivar producto (NUEVO)
+  inactivar: async (id) => {
+    const respuesta = await api.post(`/productos/${id}/inactivar/`);
     return respuesta.data;
   },
 
-  // Actualizar precios
-  actualizarPrecios: async (id) => {
-    const respuesta = await api.post(`/productos/${id}/actualizar_precios/`);
+  // Obtener productos por empresa
+  obtenerPorEmpresa: async (empresaNit) => {
+    const respuesta = await api.get(`/productos/`, {
+      params: { empresa: empresaNit }
+    });
     return respuesta.data;
   },
 };

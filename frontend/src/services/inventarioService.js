@@ -1,84 +1,63 @@
 import api from './api';
 
 const inventarioService = {
-  // ⭐ ACTUALIZADO: Usar endpoint correcto /inventario/ en lugar de /inventario/registros/
-  
-  // Obtener inventarios
+  // Obtener todos los registros de inventario
   obtenerRegistros: async (params = {}) => {
     const respuesta = await api.get('/inventario/', { params });
     return respuesta.data;
   },
 
-  obtenerRegistroPorId: async (id) => {
+  // ⭐ Obtener un registro de inventario por ID
+  obtenerPorId: async (id) => {
     const respuesta = await api.get(`/inventario/${id}/`);
     return respuesta.data;
   },
 
-  crearRegistro: async (datos) => {
-    const respuesta = await api.post('/inventario/', datos);
-    return respuesta.data;
-  },
-
-  actualizarRegistro: async (id, datos) => {
-    const respuesta = await api.put(`/inventario/${id}/`, datos);
-    return respuesta.data;
-  },
-
-  eliminarRegistro: async (id) => {
-    const respuesta = await api.delete(`/inventario/${id}/`);
-    return respuesta.data;
-  },
-
-  // ⭐ DESHABILITADO temporalmente - endpoint no implementado
-  // Obtener inventario por empresa
-  obtenerPorEmpresa: async (nit = null) => {
-    const params = nit ? { nit } : {};
-    const respuesta = await api.get('/inventario/', { params });
-    return respuesta.data;
-  },
-
-  // ⭐ DESHABILITADO temporalmente - usar chatbot en su lugar
-  // Productos bajo stock - usar el chatbot para esta funcionalidad
+  // Obtener productos con bajo stock
   obtenerBajoStock: async () => {
-    // Por ahora retornar array vacío
-    // Esta funcionalidad está disponible a través del chatbot
-    console.warn('obtenerBajoStock: Usar chatbot para consultar productos bajo stock');
-    return [];
+    const respuesta = await api.get('/inventario/productos_bajo_stock/');
+    return respuesta.data;
   },
 
-  // ⭐ DESHABILITADO temporalmente - endpoints no implementados
-  // Generar PDF
-  generarPDF: async (empresaNit = null) => {
-    console.warn('generarPDF: Funcionalidad no disponible actualmente');
-    return { mensaje: 'Funcionalidad no disponible' };
+  // Generar PDF de inventario
+  generarPDF: async () => {
+    const respuesta = await api.get('/inventario/generar_pdf/');
+    return respuesta.data;
   },
 
   // Enviar PDF por email
-  enviarPDFEmail: async (correoDestino, empresaNit = null) => {
-    console.warn('enviarPDFEmail: Funcionalidad no disponible actualmente');
-    return { mensaje: 'Funcionalidad no disponible' };
+  enviarPDFEmail: async (correoDestino) => {
+    const respuesta = await api.post('/inventario/enviar_pdf_email/', {
+      correo_destino: correoDestino
+    });
+    return respuesta.data;
   },
 
-  // ⭐ ACTUALIZADO: Movimientos de Inventario
+  // Obtener todos los movimientos
   obtenerMovimientos: async (params = {}) => {
     const respuesta = await api.get('/movimientos/', { params });
     return respuesta.data;
   },
 
+  // ⭐ Crear movimiento (ENTRADA, SALIDA, AJUSTE)
   crearMovimiento: async (datos) => {
     const respuesta = await api.post('/movimientos/', datos);
     return respuesta.data;
   },
 
-  // ⭐ DESHABILITADO temporalmente - endpoints no implementados
-  generarPDFMovimientos: async (filtros = {}) => {
-    console.warn('generarPDFMovimientos: Funcionalidad no disponible actualmente');
-    return { mensaje: 'Funcionalidad no disponible' };
+  // Generar PDF de movimientos
+  generarPDFMovimientos: async (params = {}) => {
+    const respuesta = await api.get('/movimientos/generar_pdf/', { params });
+    return respuesta.data;
   },
 
-  enviarPDFMovimientosEmail: async (correoDestino, filtros = {}) => {
-    console.warn('enviarPDFMovimientosEmail: Funcionalidad no disponible actualmente');
-    return { mensaje: 'Funcionalidad no disponible' };
+  // Enviar PDF de movimientos por email
+  enviarPDFMovimientosEmail: async (correoDestino, params = {}) => {
+    const respuesta = await api.post('/movimientos/enviar_pdf_email/', {
+      correo_destino: correoDestino,
+      ...params
+    });
+    return respuesta.data;
   },
 };
 

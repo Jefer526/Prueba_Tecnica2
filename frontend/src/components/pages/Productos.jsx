@@ -12,7 +12,6 @@ import Alert from '../atoms/Alert';
 import Select from '../atoms/Select';
 import Textarea from '../atoms/Textarea';
 
-
 const Productos = () => {
   const { esAdministrador } = useAuthStore();
   const [productos, setProductos] = useState([]);
@@ -22,23 +21,35 @@ const Productos = () => {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [alerta, setAlerta] = useState(null);
-  const [imagenPreview, setImagenPreview] = useState(null);
 
   const [formulario, setFormulario] = useState({
-    codigo: '',
     nombre: '',
-    caracteristicas: '',
+    descripcion: '',
     precio_usd: '',
-    empresa: '',
-    imagen: null,
+    categoria: '',
+    empresa_nit: '',
   });
 
-  // ✅ Obtener si es administrador
   const esAdmin = esAdministrador();
+
+  // ⭐ Categorías disponibles (deben coincidir con el backend)
+  const categorias = [
+    { valor: 'TECNOLOGIA', etiqueta: 'Tecnología' },
+    { valor: 'ROPA', etiqueta: 'Ropa' },
+    { valor: 'ALIMENTOS', etiqueta: 'Alimentos' },
+    { valor: 'HOGAR', etiqueta: 'Hogar' },
+    { valor: 'DEPORTES', etiqueta: 'Deportes' },
+    { valor: 'OTROS', etiqueta: 'Otros' },
+  ];
 
   const columnas = [
     { titulo: 'Código', campo: 'codigo' },
     { titulo: 'Nombre', campo: 'nombre' },
+    { 
+      titulo: 'Categoría', 
+      campo: 'categoria',
+      renderizar: (fila) => fila.categoria || 'N/A'
+    },
     { 
       titulo: 'USD', 
       campo: 'precio_usd',
@@ -97,7 +108,6 @@ const Productos = () => {
       const datos = await empresasService.obtenerTodas();
       const empresasArray = Array.isArray(datos) ? datos : (datos.results || datos.data || []);
       
-      // Filtrar solo empresas activas
       const empresasActivas = empresasArray.filter(emp => emp.activo);
       setEmpresas(empresasActivas);
     } catch (error) {
@@ -111,7 +121,6 @@ const Productos = () => {
   };
 
   const abrirModal = (producto = null) => {
-    // ✅ Verificar permisos antes de abrir modal
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
       return;
@@ -120,25 +129,21 @@ const Productos = () => {
     if (producto) {
       setProductoSeleccionado(producto);
       setFormulario({
-        codigo: producto.codigo,
         nombre: producto.nombre,
-        caracteristicas: producto.caracteristicas || '',
+        descripcion: producto.descripcion || '',
         precio_usd: producto.precio_usd,
-        empresa: producto.empresa,
-        imagen: null,
+        categoria: producto.categoria,
+        empresa_nit: producto.empresa, // El NIT de la empresa
       });
-      setImagenPreview(producto.imagen);
     } else {
       setProductoSeleccionado(null);
       setFormulario({
-        codigo: '',
         nombre: '',
-        caracteristicas: '',
+        descripcion: '',
         precio_usd: '',
-        empresa: '',
-        imagen: null,
+        categoria: '',
+        empresa_nit: '',
       });
-      setImagenPreview(null);
     }
     setModalAbierto(true);
   };
@@ -146,113 +151,50 @@ const Productos = () => {
   const cerrarModal = () => {
     setModalAbierto(false);
     setProductoSeleccionado(null);
-    setImagenPreview(null);
     setFormulario({
-      codigo: '',
       nombre: '',
-      caracteristicas: '',
+      descripcion: '',
       precio_usd: '',
-      empresa: '',
-      imagen: null,
+      categoria: '',
+      empresa_nit: '',
     });
   };
 
-  const generarCodigo = async (nombre) => {
-    if (!nombre || nombre.length < 2) return '';
-    
-    // Tomar las 2 primeras letras y convertir a mayúsculas
-    const prefijo = nombre.substring(0, 2).toUpperCase();
-    
-    // Buscar productos existentes con ese prefijo
-    const productosConPrefijo = productos.filter(p => 
-      p.codigo.startsWith(prefijo)
-    );
-    
-    // Obtener el número más alto
-    let numeroMasAlto = 0;
-    productosConPrefijo.forEach(p => {
-      const numero = parseInt(p.codigo.substring(2));
-      if (!isNaN(numero) && numero > numeroMasAlto) {
-        numeroMasAlto = numero;
-      }
-    });
-    
-    // Generar el siguiente número
-    const siguienteNumero = (numeroMasAlto + 1).toString().padStart(3, '0');
-    
-    return `${prefijo}${siguienteNumero}`;
-  };
-
-  const manejarCambio = async (e) => {
+  const manejarCambio = (e) => {
     const { name, value } = e.target;
-    
     setFormulario((prev) => ({
       ...prev,
       [name]: value,
     }));
-    
-    // Si cambia el nombre y no estamos editando, generar código automáticamente
-    if (name === 'nombre' && !productoSeleccionado && value.length >= 2) {
-      const codigoGenerado = await generarCodigo(value);
-      setFormulario((prev) => ({
-        ...prev,
-        codigo: codigoGenerado,
-      }));
-    }
-  };
-
-  const manejarCambioImagen = (e) => {
-    const archivo = e.target.files[0];
-    if (archivo) {
-      setFormulario((prev) => ({
-        ...prev,
-        imagen: archivo,
-      }));
-      
-      // Preview de la imagen
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagenPreview(reader.result);
-      };
-      reader.readAsDataURL(archivo);
-    }
   };
 
   const manejarSubmit = async (e) => {
     e.preventDefault();
 
-    // ✅ Verificar permisos antes de guardar
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
       return;
     }
 
     try {
-      // Crear FormData para enviar archivo
-      const formData = new FormData();
-      formData.append('codigo', formulario.codigo);
-      formData.append('nombre', formulario.nombre);
-      formData.append('caracteristicas', formulario.caracteristicas || '');
-      formData.append('precio_usd', formulario.precio_usd);
-      formData.append('empresa', formulario.empresa);
-      formData.append('activo', 'true');
-      
-      // Solo agregar imagen si existe
-      if (formulario.imagen) {
-        formData.append('imagen', formulario.imagen);
-      }
+      // ⭐ Enviar solo los campos que el backend espera (JSON, no FormData)
+      const datosProducto = {
+        nombre: formulario.nombre.trim(),
+        descripcion: formulario.descripcion.trim(),
+        precio_usd: parseFloat(formulario.precio_usd),
+        categoria: formulario.categoria,
+        empresa_nit: formulario.empresa_nit,
+      };
 
-      // Log para debug
-      console.log('Datos a enviar:');
-      for (let pair of formData.entries()) {
-        console.log(pair[0] + ': ' + pair[1]);
-      }
+      console.log('Datos a enviar:', datosProducto);
 
       if (productoSeleccionado) {
-        await productosService.actualizar(productoSeleccionado.codigo, formData);
+        // Actualizar usa el ID del producto
+        await productosService.actualizar(productoSeleccionado.id, datosProducto);
         mostrarAlerta('success', 'Producto actualizado exitosamente');
       } else {
-        await productosService.crear(formData);
+        // Crear producto (backend genera el código automáticamente)
+        await productosService.crear(datosProducto);
         mostrarAlerta('success', 'Producto creado exitosamente');
       }
       
@@ -262,16 +204,29 @@ const Productos = () => {
       console.error('Error al guardar producto:', error);
       console.error('Error response:', error.response?.data);
       
-      const mensajeError = error.response?.data?.detail 
-        || error.response?.data?.error
-        || JSON.stringify(error.response?.data)
-        || 'Error al guardar producto';
+      let mensajeError = 'Error al guardar producto';
+      
+      if (error.response?.data) {
+        const errores = error.response.data;
+        
+        if (typeof errores === 'object' && !errores.detail && !errores.error) {
+          const mensajes = Object.entries(errores).map(([campo, mensajes]) => {
+            const mensajesCampo = Array.isArray(mensajes) ? mensajes.join(', ') : mensajes;
+            return `${campo}: ${mensajesCampo}`;
+          });
+          mensajeError = mensajes.join('\n');
+        } else if (errores.detail) {
+          mensajeError = errores.detail;
+        } else if (errores.error) {
+          mensajeError = errores.error;
+        }
+      }
+      
       mostrarAlerta('error', mensajeError);
     }
   };
 
   const manejarEliminar = async (producto) => {
-    // ✅ Verificar permisos antes de eliminar
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
       return;
@@ -279,34 +234,42 @@ const Productos = () => {
 
     if (window.confirm(`¿Está seguro de eliminar el producto ${producto.nombre}?`)) {
       try {
-        await productosService.eliminar(producto.codigo);
+        await productosService.eliminar(producto.id);
         mostrarAlerta('success', 'Producto eliminado exitosamente');
         await cargarProductos();
       } catch (error) {
         console.error('Error al eliminar producto:', error);
-        mostrarAlerta('error', 'Error al eliminar producto');
+        const mensajeError = error.response?.data?.error 
+          || error.response?.data?.detail 
+          || 'Error al eliminar producto';
+        mostrarAlerta('error', mensajeError);
       }
     }
   };
 
   const manejarActivar = async (producto) => {
-    // ✅ Verificar permisos antes de activar/desactivar
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
       return;
     }
 
     try {
-      await productosService.activar(producto.codigo);
-      const nuevoEstado = !producto.activo;
-      mostrarAlerta(
-        'success', 
-        `Producto ${nuevoEstado ? 'activado' : 'desactivado'} exitosamente`
-      );
+      // ✅ Llamar al endpoint correcto según el estado actual
+      if (producto.activo) {
+        await productosService.inactivar(producto.id);
+        mostrarAlerta('success', 'Producto inactivado exitosamente');
+      } else {
+        await productosService.activar(producto.id);
+        mostrarAlerta('success', 'Producto activado exitosamente');
+      }
+      
       await cargarProductos();
     } catch (error) {
       console.error('Error al cambiar estado del producto:', error);
-      mostrarAlerta('error', 'Error al cambiar estado del producto');
+      const mensajeError = error.response?.data?.error 
+        || error.response?.data?.detail 
+        || 'Error al cambiar estado del producto';
+      mostrarAlerta('error', mensajeError);
     }
   };
 
@@ -314,7 +277,6 @@ const Productos = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Productos</h1>
-        {/* ✅ Solo mostrar botón si es administrador */}
         {esAdmin && (
           <Boton onClick={() => abrirModal()}>+ Nuevo Producto</Boton>
         )}
@@ -339,7 +301,6 @@ const Productos = () => {
         />
       </Card>
 
-      {/* ✅ Solo renderizar modal si es administrador */}
       {esAdmin && (
         <Modal
           estaAbierto={modalAbierto}
@@ -360,21 +321,16 @@ const Productos = () => {
               />
 
               <div>
-                <FormField
-                  etiqueta="Código del Producto"
-                  nombre="codigo"
-                  tipo="text"
-                  placeholder={productoSeleccionado ? "" : "Ej: LA001"}
-                  valor={formulario.codigo}
+                <label className="form-label">
+                  Categoría <span className="text-red-500">*</span>
+                </label>
+                <Select
+                  nombre="categoria"
+                  valor={formulario.categoria}
                   onChange={manejarCambio}
+                  opciones={categorias}
                   requerido
-                  deshabilitado={!!productoSeleccionado}
                 />
-                {!productoSeleccionado && formulario.nombre && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    💡 Generado automáticamente. Puedes editarlo si deseas.
-                  </p>
-                )}
               </div>
 
               <div className="md:col-span-2">
@@ -382,8 +338,8 @@ const Productos = () => {
                   Empresa <span className="text-red-500">*</span>
                 </label>
                 <Select
-                  nombre="empresa"
-                  valor={formulario.empresa}
+                  nombre="empresa_nit"
+                  valor={formulario.empresa_nit}
                   onChange={manejarCambio}
                   opciones={empresas.map(emp => ({
                     valor: emp.nit,
@@ -404,30 +360,12 @@ const Productos = () => {
                 requerido
               />
 
-              <div>
-                <label className="form-label">Imagen del Producto</label>
-                <input
-                  type="file"
-                  name="imagen"
-                  accept="image/*"
-                  onChange={manejarCambioImagen}
-                  className="form-input"
-                />
-                {imagenPreview && (
-                  <img
-                    src={imagenPreview}
-                    alt="Preview"
-                    className="mt-2 w-32 h-32 object-cover rounded"
-                  />
-                )}
-              </div>
-
               <div className="md:col-span-2">
-                <label className="form-label">Características</label>
+                <label className="form-label">Descripción</label>
                 <Textarea
-                  nombre="caracteristicas"
+                  nombre="descripcion"
                   placeholder="Descripción y características del producto..."
-                  valor={formulario.caracteristicas}
+                  valor={formulario.descripcion}
                   onChange={manejarCambio}
                   filas={4}
                 />

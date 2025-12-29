@@ -1,13 +1,14 @@
 """
-Views para Productos - ULTRA SIMPLIFICADO
-Solo usa caso de uso para CREAR, el resto directo con modelos
+Views para Productos - COMPLETO
+Muestra todos (activos e inactivos), Hard Delete, empresa_nit
 """
+from decimal import Decimal
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
-from infraestructura.django_orm.models import ProductoModel, EmpresaModel
+from infraestructura.django_orm.models import ProductoModel, EmpresaModel, InventarioModel
 from presentacion.api.serializers_productos import (
     ProductoListaSerializer,
     ProductoDetalleSerializer,
@@ -32,9 +33,9 @@ class ProductoViewSet(viewsets.ModelViewSet):
         return ProductoListaSerializer
     
     def list(self, request, *args, **kwargs):
-        """Listar productos activos"""
+        """Listar TODOS los productos (activos e inactivos)"""
         try:
-            productos = ProductoModel.objects.filter(activo=True).select_related('empresa')
+            productos = ProductoModel.objects.select_related('empresa').all()  # ✅ Todos
             serializer = ProductoListaSerializer(productos, many=True)
             return Response(serializer.data)
         except Exception as e:
@@ -50,13 +51,19 @@ class ProductoViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Producto no encontrado'}, status=status.HTTP_404_NOT_FOUND)
     
     def create(self, request, *args, **kwargs):
-        """Crear nuevo producto - USA CASO DE USO"""
+        """Crear nuevo producto con código automático"""
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             
             # Verificar que la empresa existe
-            empresa_nit = serializer.validated_data['empresa_nit']
+            empresa_nit = serializer.validated_data.get('empresa_nit')
+            if not empresa_nit:
+                return Response(
+                    {'error': 'empresa_nit es requerido'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             try:
                 empresa = EmpresaModel.objects.get(nit=empresa_nit, activo=True)
             except EmpresaModel.DoesNotExist:
@@ -65,71 +72,62 @@ class ProductoViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Usar caso de uso de crear_producto.py
-            try:
-                from aplicacion.casos_uso.crear_producto import CrearProductoCasoDeUso
-                from infraestructura.django_orm.repositorios import (
-                    RepositorioProductosDjango,
-                    RepositorioEmpresasDjango,
-                )
-                
-                repositorio_productos = RepositorioProductosDjango()
-                repositorio_empresas = RepositorioEmpresasDjango()
-                
-                caso_uso = CrearProductoCasoDeUso(
-                    repositorio_productos,
-                    repositorio_empresas
-                )
-                
-                producto = caso_uso.ejecutar(
-                    nombre=serializer.validated_data['nombre'],
-                    descripcion=serializer.validated_data.get('descripcion', ''),
-                    precio_usd=float(serializer.validated_data['precio_usd']),
-                    categoria=serializer.validated_data['categoria'],
-                    empresa_nit=empresa_nit
-                )
-                
-                producto_model = ProductoModel.objects.get(id=producto.id)
-                
-            except ImportError:
-                # Si el caso de uso no existe, crear directamente
-                # Generar código automático
-                categoria = serializer.validated_data['categoria']
-                prefijo_map = {
-                    'TECNOLOGIA': 'TE',
-                    'ROPA': 'RO',
-                    'ALIMENTOS': 'AL',
-                    'HOGAR': 'HO',
-                    'DEPORTES': 'DE',
-                    'OTROS': 'OT'
-                }
-                prefijo = prefijo_map.get(categoria, 'OT')
-                
-                # Obtener último número
-                productos_categoria = ProductoModel.objects.filter(
-                    codigo__startswith=prefijo
-                ).order_by('-codigo')
-                
-                if productos_categoria.exists():
-                    ultimo_codigo = productos_categoria.first().codigo
-                    ultimo_numero = int(ultimo_codigo[2:])
-                    siguiente_numero = ultimo_numero + 1
-                else:
-                    siguiente_numero = 1
-                
-                codigo = f"{prefijo}{siguiente_numero:04d}"
-                
-                # Crear producto
-                producto_model = ProductoModel.objects.create(
-                    codigo=codigo,
-                    nombre=serializer.validated_data['nombre'],
-                    descripcion=serializer.validated_data.get('descripcion', ''),
-                    precio_usd=serializer.validated_data['precio_usd'],
-                    categoria=categoria,
-                    empresa=empresa
-                )
+            # ✅ Generar código automático según categoría
+            categoria = serializer.validated_data.get('categoria', 'OTROS')
+            prefijo_map = {
+                'TECNOLOGIA': 'TE',
+                'ROPA': 'RO',
+                'ALIMENTOS': 'AL',
+                'HOGAR': 'HO',
+                'DEPORTES': 'DE',
+                'OTROS': 'OT'
+            }
+            prefijo = prefijo_map.get(categoria, 'OT')
             
-            response_serializer = ProductoDetalleSerializer(producto_model)
+            # Obtener último producto con ese prefijo
+            ultimo = ProductoModel.objects.filter(
+                codigo__startswith=prefijo
+            ).order_by('-codigo').first()
+            
+            if ultimo:
+                try:
+                    numero = int(ultimo.codigo[2:]) + 1
+                except ValueError:
+                    numero = 1
+            else:
+                numero = 1
+            
+            codigo = f"{prefijo}{numero:04d}"  # TE0001, TE0002...
+            
+            # ✅ Calcular precios en otras monedas (tasas de cambio fijas)
+            precio_usd = serializer.validated_data['precio_usd']
+            precio_cop = precio_usd * Decimal('4200')
+            precio_eur = precio_usd * Decimal('0.92')
+            
+            # Crear producto
+            producto = ProductoModel.objects.create(
+                codigo=codigo,
+                nombre=serializer.validated_data['nombre'],
+                descripcion=serializer.validated_data.get('descripcion', ''),
+                precio_usd=precio_usd,
+                precio_cop=precio_cop,
+                precio_eur=precio_eur,
+                categoria=categoria,
+                empresa=empresa,
+                activo=True
+            )
+            
+            # ✅ Crear registro de inventario automáticamente
+            InventarioModel.objects.create(
+                producto=producto,
+                empresa=empresa,
+                stock_actual=0,
+                stock_minimo=10,
+                stock_maximo=100,
+                requiere_reorden=True
+            )
+            
+            response_serializer = ProductoDetalleSerializer(producto)
             return Response(
                 {
                     'mensaje': 'Producto creado exitosamente',
@@ -138,6 +136,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_201_CREATED
             )
         except Exception as e:
+            print(f"Error: {e}")
             import traceback
             traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -149,11 +148,19 @@ class ProductoViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             
+            # Actualizar campos
             producto.nombre = serializer.validated_data['nombre']
             producto.descripcion = serializer.validated_data.get('descripcion', '')
-            producto.precio_usd = serializer.validated_data['precio_usd']
-            producto.categoria = serializer.validated_data['categoria']
-            producto.calcular_precios()
+            
+            # ✅ Actualizar precio y recalcular otras monedas
+            precio_usd = serializer.validated_data['precio_usd']
+            producto.precio_usd = precio_usd
+            producto.precio_cop = precio_usd * Decimal('4200')
+            producto.precio_eur = precio_usd * Decimal('0.92')
+            
+            if 'categoria' in serializer.validated_data:
+                producto.categoria = serializer.validated_data['categoria']
+            
             producto.save()
             
             response_serializer = ProductoDetalleSerializer(producto)
@@ -166,6 +173,9 @@ class ProductoViewSet(viewsets.ModelViewSet):
         except ProductoModel.DoesNotExist:
             return Response({'error': 'Producto no encontrado'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def partial_update(self, request, *args, **kwargs):
@@ -173,13 +183,16 @@ class ProductoViewSet(viewsets.ModelViewSet):
         try:
             producto = self.get_object()
             
+            # Actualizar solo campos enviados
             if 'nombre' in request.data:
                 producto.nombre = request.data['nombre']
             if 'descripcion' in request.data:
                 producto.descripcion = request.data['descripcion']
             if 'precio_usd' in request.data:
-                producto.precio_usd = request.data['precio_usd']
-                producto.calcular_precios()
+                precio_usd = Decimal(str(request.data['precio_usd']))
+                producto.precio_usd = precio_usd
+                producto.precio_cop = precio_usd * Decimal('4200')
+                producto.precio_eur = precio_usd * Decimal('0.92')
             if 'categoria' in request.data:
                 producto.categoria = request.data['categoria']
             
@@ -198,27 +211,37 @@ class ProductoViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def destroy(self, request, *args, **kwargs):
-        """Eliminar producto (DELETE) - Soft delete"""
+        """Eliminar producto (DELETE) - HARD DELETE"""
         try:
             producto = self.get_object()
             
-            # Verificar inventario
-            if hasattr(producto, 'registro_inventario') and producto.registro_inventario.cantidad > 0:
-                return Response(
-                    {'error': 'No se puede eliminar un producto con inventario'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            # Verificar si tiene inventario
+            try:
+                inventario = InventarioModel.objects.get(producto=producto)
+                if inventario.stock_actual > 0:
+                    return Response(
+                        {'error': 'No se puede eliminar un producto con stock en inventario'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                # Eliminar inventario también
+                inventario.delete()
+            except InventarioModel.DoesNotExist:
+                pass
             
-            producto.activo = False
-            producto.save()
+            # ✅ HARD DELETE - Eliminar físicamente
+            codigo_eliminado = producto.codigo
+            producto.delete()
             
             return Response(
-                {'mensaje': 'Producto eliminado exitosamente'},
+                {'mensaje': f'Producto {codigo_eliminado} eliminado permanentemente'},
                 status=status.HTTP_200_OK
             )
         except ProductoModel.DoesNotExist:
             return Response({'error': 'Producto no encontrado'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['post'])
@@ -233,9 +256,20 @@ class ProductoViewSet(viewsets.ModelViewSet):
                 )
             producto.activo = False
             producto.save()
-            return Response({'mensaje': 'Producto inactivado exitosamente'}, status=status.HTTP_200_OK)
+            
+            print(f"✅ Producto {producto.codigo} inactivado")
+            
+            return Response(
+                {'mensaje': 'Producto inactivado exitosamente'},
+                status=status.HTTP_200_OK
+            )
         except ProductoModel.DoesNotExist:
             return Response({'error': 'Producto no encontrado'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['post'])
     def activar(self, request, pk=None):
@@ -249,6 +283,17 @@ class ProductoViewSet(viewsets.ModelViewSet):
                 )
             producto.activo = True
             producto.save()
-            return Response({'mensaje': 'Producto activado exitosamente'}, status=status.HTTP_200_OK)
+            
+            print(f"✅ Producto {producto.codigo} activado")
+            
+            return Response(
+                {'mensaje': 'Producto activado exitosamente'},
+                status=status.HTTP_200_OK
+            )
         except ProductoModel.DoesNotExist:
             return Response({'error': 'Producto no encontrado'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

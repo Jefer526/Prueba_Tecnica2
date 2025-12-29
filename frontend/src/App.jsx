@@ -46,7 +46,7 @@ function App() {
           <Route path="/empresas" element={<Empresas />} />
           <Route path="/productos" element={<Productos />} />
           <Route path="/inventario" element={<Inventario />} />
-          <Route path="/inventario/producto/:codigo" element={<DetalleProductoInventario />} />
+          <Route path="/inventario/producto/:id" element={<DetalleProductoInventario />} />
           <Route path="/ia" element={<ChatbotIA />} />
         </Route>
 

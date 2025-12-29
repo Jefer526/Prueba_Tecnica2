@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/useAuthStore';
 import inventarioService from '../../services/inventarioService';
-import productosService from '../../services/productosService';
 import empresasService from '../../services/empresasService';
 import Card from '../atoms/Card';
 import Boton from '../atoms/Boton';
@@ -18,12 +17,8 @@ const Inventario = () => {
   const navigate = useNavigate();
   const [registros, setRegistros] = useState([]);
   const [registrosFiltrados, setRegistrosFiltrados] = useState([]);
-  const [productos, setProductos] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [estaCargando, setEstaCargando] = useState(true);
-  const [modalAbierto, setModalAbierto] = useState(false);
-  const [modalMovimientoAbierto, setModalMovimientoAbierto] = useState(false);
-  const [registroSeleccionado, setRegistroSeleccionado] = useState(null);
   const [alerta, setAlerta] = useState(null);
 
   // Estados para búsqueda y filtros
@@ -31,35 +26,31 @@ const Inventario = () => {
   const [filtroEmpresa, setFiltroEmpresa] = useState('');
   const [filtroReorden, setFiltroReorden] = useState('todos');
 
+  // Estados para modal de movimiento
+  const [modalMovimientoAbierto, setModalMovimientoAbierto] = useState(false);
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [formularioMovimiento, setFormularioMovimiento] = useState({
+    producto_id: '',
+    tipo_movimiento: 'ENTRADA',
+    cantidad: '',
+    observaciones: '',
+  });
+
   // Estados para envío de email
   const [modalEmailAbierto, setModalEmailAbierto] = useState(false);
   const [correoDestino, setCorreoDestino] = useState('');
   const [enviandoEmail, setEnviandoEmail] = useState(false);
 
-  // ✅ Obtener si es administrador
   const esAdmin = esAdministrador();
 
-  const [formulario, setFormulario] = useState({
-    producto: '',
-    empresa: '',
-    cantidad: '',
-    cantidad_minima: '10',
-    ubicacion_bodega: '',
-  });
-
-  const [formularioMovimiento, setFormularioMovimiento] = useState({
-    tipo_movimiento: 'ENTRADA',
-    cantidad: '',
-    motivo: '',
-  });
-
+  // ✅ Columnas con nombres de campos CORRECTOS
   const columnas = [
     { 
       titulo: 'Producto', 
       campo: 'producto',
       renderizar: (fila) => (
         <button
-          onClick={() => navigate(`/inventario/producto/${fila.producto}`)}
+          onClick={() => navigate(`/inventario/producto/${fila.id}`)}
           className="text-primary-600 hover:text-primary-700 hover:underline font-semibold"
         >
           {fila.producto_detalle?.nombre || 'N/A'}
@@ -72,19 +63,17 @@ const Inventario = () => {
       renderizar: (fila) => fila.empresa_detalle?.nombre || 'N/A'
     },
     { 
-      titulo: 'Cantidad', 
-      campo: 'cantidad',
+      titulo: 'Stock Actual',
+      campo: 'stock_actual',
       renderizar: (fila) => (
         <span className={fila.requiere_reorden ? 'text-red-600 font-bold' : ''}>
-          {fila.cantidad}
+          {fila.stock_actual}
         </span>
       )
     },
-    { titulo: 'Cant. Mínima', campo: 'cantidad_minima' },
     { 
-      titulo: 'Ubicación', 
-      campo: 'ubicacion_bodega',
-      renderizar: (fila) => fila.ubicacion_bodega || 'N/A'
+      titulo: 'Stock Mínimo',
+      campo: 'stock_minimo'
     },
     {
       titulo: 'Requiere Reorden',
@@ -99,7 +88,6 @@ const Inventario = () => {
 
   useEffect(() => {
     cargarInventario();
-    cargarProductos();
     cargarEmpresas();
   }, []);
 
@@ -114,17 +102,15 @@ const Inventario = () => {
       const busquedaLower = busqueda.toLowerCase();
       resultados = resultados.filter(registro => {
         const nombreProducto = (registro.producto_detalle?.nombre || '').toLowerCase();
-        const codigoProducto = (registro.producto || '').toLowerCase();
-        const ubicacion = (registro.ubicacion_bodega || '').toLowerCase();
+        const codigoProducto = (registro.producto_detalle?.codigo || '').toLowerCase();
         
         return nombreProducto.includes(busquedaLower) ||
-               codigoProducto.includes(busquedaLower) ||
-               ubicacion.includes(busquedaLower);
+               codigoProducto.includes(busquedaLower);
       });
     }
 
     if (filtroEmpresa !== '') {
-      resultados = resultados.filter(registro => registro.empresa === filtroEmpresa);
+      resultados = resultados.filter(registro => registro.empresa === parseInt(filtroEmpresa));
     }
 
     if (filtroReorden === 'si') {
@@ -153,18 +139,6 @@ const Inventario = () => {
     }
   };
 
-  const cargarProductos = async () => {
-    try {
-      const datos = await productosService.obtenerTodos();
-      const productosArray = Array.isArray(datos) ? datos : (datos.results || datos.data || []);
-      
-      const productosActivos = productosArray.filter(p => p.activo);
-      setProductos(productosActivos);
-    } catch (error) {
-      console.error('Error al cargar productos:', error);
-    }
-  };
-
   const cargarEmpresas = async () => {
     try {
       const datos = await empresasService.obtenerTodas();
@@ -182,130 +156,53 @@ const Inventario = () => {
     setTimeout(() => setAlerta(null), 5000);
   };
 
-  const abrirModal = (registro = null) => {
-    // ✅ Verificar permisos si no hay registro (crear nuevo)
-    if (!registro && !esAdmin) {
-      mostrarAlerta('error', 'No tienes permisos para crear registros');
-      return;
-    }
-
-    // ✅ Verificar permisos para editar
-    if (registro && !esAdmin) {
-      mostrarAlerta('error', 'No tienes permisos para editar registros');
-      return;
-    }
-
-    if (registro) {
-      setRegistroSeleccionado(registro);
-      setFormulario({
-        producto: registro.producto,
-        empresa: registro.empresa,
-        cantidad: registro.cantidad,
-        cantidad_minima: registro.cantidad_minima,
-        ubicacion_bodega: registro.ubicacion_bodega || '',
-      });
-    } else {
-      setRegistroSeleccionado(null);
-      setFormulario({
-        producto: '',
-        empresa: '',
-        cantidad: '',
-        cantidad_minima: '10',
-        ubicacion_bodega: '',
-      });
-    }
-    setModalAbierto(true);
-  };
-
-  const cerrarModal = () => {
-    setModalAbierto(false);
-    setRegistroSeleccionado(null);
-    setFormulario({
-      producto: '',
-      empresa: '',
-      cantidad: '',
-      cantidad_minima: '10',
-      ubicacion_bodega: '',
-    });
-  };
-
-  const abrirModalMovimiento = (registro) => {
-    // ✅ Verificar permisos antes de abrir modal de movimiento
+  // ⭐ FUNCIÓN: Abrir modal de movimiento
+  const abrirModalMovimiento = () => {
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para registrar movimientos');
       return;
     }
 
-    setRegistroSeleccionado(registro);
     setFormularioMovimiento({
+      producto_id: '',
       tipo_movimiento: 'ENTRADA',
       cantidad: '',
-      motivo: '',
+      observaciones: '',
     });
+    setProductoSeleccionado(null);
     setModalMovimientoAbierto(true);
   };
 
   const cerrarModalMovimiento = () => {
     setModalMovimientoAbierto(false);
-    setRegistroSeleccionado(null);
     setFormularioMovimiento({
+      producto_id: '',
       tipo_movimiento: 'ENTRADA',
       cantidad: '',
-      motivo: '',
+      observaciones: '',
     });
-  };
-
-  const manejarCambio = (e) => {
-    const { name, value } = e.target;
-    setFormulario((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setProductoSeleccionado(null);
   };
 
   const manejarCambioMovimiento = (e) => {
     const { name, value } = e.target;
+    
     setFormularioMovimiento((prev) => ({
       ...prev,
       [name]: value,
     }));
-  };
 
-  const manejarSubmit = async (e) => {
-    e.preventDefault();
-
-    // ✅ Verificar permisos antes de guardar
-    if (!esAdmin) {
-      mostrarAlerta('error', 'No tienes permisos para realizar esta acción');
-      return;
-    }
-
-    try {
-      if (registroSeleccionado) {
-        await inventarioService.actualizarRegistro(registroSeleccionado.id, formulario);
-        mostrarAlerta('success', 'Registro actualizado exitosamente');
-      } else {
-        await inventarioService.crearRegistro(formulario);
-        mostrarAlerta('success', 'Registro creado exitosamente');
-      }
-      
-      cerrarModal();
-      await cargarInventario();
-    } catch (error) {
-      console.error('Error al guardar registro:', error);
-      
-      const mensajeError = error.response?.data?.detail 
-        || error.response?.data?.error
-        || JSON.stringify(error.response?.data)
-        || 'Error al guardar registro';
-      mostrarAlerta('error', mensajeError);
+    // Si cambia el producto, actualizar el producto seleccionado
+    if (name === 'producto_id') {
+      const producto = registros.find(r => r.producto === parseInt(value));
+      setProductoSeleccionado(producto);
     }
   };
 
+  // ⭐ FUNCIÓN: Registrar movimiento
   const manejarSubmitMovimiento = async (e) => {
     e.preventDefault();
 
-    // ✅ Verificar permisos antes de registrar movimiento
     if (!esAdmin) {
       mostrarAlerta('error', 'No tienes permisos para registrar movimientos');
       return;
@@ -313,8 +210,10 @@ const Inventario = () => {
 
     try {
       await inventarioService.crearMovimiento({
-        registro_inventario: registroSeleccionado.id,
-        ...formularioMovimiento,
+        producto_id: parseInt(formularioMovimiento.producto_id),
+        tipo_movimiento: formularioMovimiento.tipo_movimiento,
+        cantidad: parseInt(formularioMovimiento.cantidad),
+        observaciones: formularioMovimiento.observaciones,
       });
       
       mostrarAlerta('success', 'Movimiento registrado exitosamente');
@@ -322,10 +221,14 @@ const Inventario = () => {
       await cargarInventario();
     } catch (error) {
       console.error('Error al registrar movimiento:', error);
-      mostrarAlerta('error', 'Error al registrar movimiento');
+      const mensajeError = error.response?.data?.error 
+        || error.response?.data?.detail 
+        || 'Error al registrar movimiento';
+      mostrarAlerta('error', mensajeError);
     }
   };
 
+  // ⭐ FUNCIÓN: Generar PDF de inventario
   const generarPDF = async () => {
     try {
       console.log('Generando PDF...');
@@ -360,6 +263,7 @@ const Inventario = () => {
     }
   };
 
+  // ⭐ FUNCIÓN: Generar PDF de movimientos
   const generarPDFMovimientos = async () => {
     try {
       console.log('Generando PDF de movimientos...');
@@ -394,6 +298,7 @@ const Inventario = () => {
     }
   };
 
+  // ⭐ FUNCIÓN: Abrir modal de email
   const abrirModalEmail = () => {
     setCorreoDestino('');
     setModalEmailAbierto(true);
@@ -404,6 +309,7 @@ const Inventario = () => {
     setCorreoDestino('');
   };
 
+  // ⭐ FUNCIÓN: Enviar PDF por email
   const enviarPDFPorEmail = async (e) => {
     e.preventDefault();
 
@@ -443,11 +349,36 @@ const Inventario = () => {
     setFiltroReorden('todos');
   };
 
+  // Calcular stock después del movimiento
+  const calcularStockDespues = () => {
+    if (!productoSeleccionado || !formularioMovimiento.cantidad) return null;
+
+    const cantidad = parseInt(formularioMovimiento.cantidad);
+    const stockActual = productoSeleccionado.stock_actual;
+
+    switch (formularioMovimiento.tipo_movimiento) {
+      case 'ENTRADA':
+        return stockActual + cantidad;
+      case 'SALIDA':
+        return stockActual - cantidad;
+      case 'AJUSTE':
+        return cantidad;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Inventario</h1>
         <div className="flex gap-3">
+          {/* ⭐ Botón Registrar Movimiento */}
+          {esAdmin && (
+            <Boton onClick={abrirModalMovimiento} variante="primary">
+              📦 Registrar Movimiento
+            </Boton>
+          )}
           <Boton onClick={generarPDFMovimientos} variante="secondary">
             📋 Movimientos PDF
           </Boton>
@@ -457,10 +388,6 @@ const Inventario = () => {
           <Boton onClick={abrirModalEmail} variante="secondary">
             📧 Enviar Email
           </Boton>
-          {/* ✅ CAMBIO: Botón visible solo para administradores */}
-          {esAdmin && (
-            <Boton onClick={() => abrirModal()}>+ Nuevo Registro</Boton>
-          )}
         </div>
       </div>
 
@@ -478,7 +405,7 @@ const Inventario = () => {
             <label className="form-label">🔍 Buscar Producto</label>
             <input
               type="text"
-              placeholder="Buscar por nombre, código o ubicación..."
+              placeholder="Buscar por nombre o código..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="form-input"
@@ -494,7 +421,7 @@ const Inventario = () => {
               opciones={[
                 { valor: '', etiqueta: 'Todas las empresas' },
                 ...empresas.map(emp => ({
-                  valor: emp.nit,
+                  valor: emp.id,
                   etiqueta: emp.nombre
                 }))
               ]}
@@ -533,111 +460,36 @@ const Inventario = () => {
         <DataTable
           columnas={columnas}
           datos={registrosFiltrados}
-          {...(esAdmin && { onEditar: abrirModal })}
-          {...(esAdmin && { onVer: abrirModalMovimiento })}
-          {...(esAdmin && { accionVer: 'movimiento' })}
           estaCargando={estaCargando}
         />
       </Card>
 
-      {/* Modal de Crear/Editar Registro - Solo para admin */}
+      {/* ⭐ MODAL: Registrar Movimiento */}
       {esAdmin && (
         <Modal
-          estaAbierto={modalAbierto}
-          onCerrar={cerrarModal}
-          titulo={registroSeleccionado ? 'Editar Registro' : 'Nuevo Registro de Inventario'}
+          estaAbierto={modalMovimientoAbierto}
+          onCerrar={cerrarModalMovimiento}
+          titulo="Registrar Movimiento de Inventario"
           tamaño="lg"
         >
-          <form onSubmit={manejarSubmit}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={manejarSubmitMovimiento}>
+            <div className="space-y-4">
               <div>
                 <label className="form-label">
                   Producto <span className="text-red-500">*</span>
                 </label>
                 <Select
-                  nombre="producto"
-                  valor={formulario.producto}
-                  onChange={manejarCambio}
-                  opciones={productos.map(p => ({
-                    valor: p.codigo,
-                    etiqueta: `${p.nombre} (${p.codigo})`
+                  nombre="producto_id"
+                  valor={formularioMovimiento.producto_id}
+                  onChange={manejarCambioMovimiento}
+                  opciones={registros.map(r => ({
+                    valor: r.producto,
+                    etiqueta: `${r.producto_detalle?.nombre || 'N/A'} - Stock: ${r.stock_actual}`
                   }))}
                   requerido
-                  deshabilitado={!!registroSeleccionado}
                 />
               </div>
 
-              <div>
-                <label className="form-label">
-                  Empresa <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  nombre="empresa"
-                  valor={formulario.empresa}
-                  onChange={manejarCambio}
-                  opciones={empresas.map(emp => ({
-                    valor: emp.nit,
-                    etiqueta: emp.nombre
-                  }))}
-                  requerido
-                  deshabilitado={!!registroSeleccionado}
-                />
-              </div>
-
-              <FormField
-                etiqueta="Cantidad en Stock"
-                nombre="cantidad"
-                tipo="number"
-                placeholder="100"
-                valor={formulario.cantidad}
-                onChange={manejarCambio}
-                requerido
-              />
-
-              <FormField
-                etiqueta="Cantidad Mínima"
-                nombre="cantidad_minima"
-                tipo="number"
-                placeholder="10"
-                valor={formulario.cantidad_minima}
-                onChange={manejarCambio}
-                requerido
-              />
-
-              <div className="md:col-span-2">
-                <FormField
-                  etiqueta="Ubicación en Bodega"
-                  nombre="ubicacion_bodega"
-                  tipo="text"
-                  placeholder="Ej: Pasillo A, Estante 3"
-                  valor={formulario.ubicacion_bodega}
-                  onChange={manejarCambio}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <Boton tipo="button" variante="secondary" onClick={cerrarModal}>
-                Cancelar
-              </Boton>
-              <Boton tipo="submit">
-                {registroSeleccionado ? 'Actualizar' : 'Crear'}
-              </Boton>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* Modal de Movimiento - Solo para admin */}
-      {esAdmin && (
-        <Modal
-          estaAbierto={modalMovimientoAbierto}
-          onCerrar={cerrarModalMovimiento}
-          titulo={`Registrar Movimiento - ${registroSeleccionado?.producto_detalle?.nombre || ''}`}
-          tamaño="md"
-        >
-          <form onSubmit={manejarSubmitMovimiento}>
-            <div className="space-y-4">
               <div>
                 <label className="form-label">
                   Tipo de Movimiento <span className="text-red-500">*</span>
@@ -649,7 +501,7 @@ const Inventario = () => {
                   opciones={[
                     { valor: 'ENTRADA', etiqueta: '📥 Entrada (Aumenta stock)' },
                     { valor: 'SALIDA', etiqueta: '📤 Salida (Reduce stock)' },
-                    { valor: 'AJUSTE', etiqueta: '🔧 Ajuste' },
+                    { valor: 'AJUSTE', etiqueta: '🔧 Ajuste (Establece cantidad exacta)' },
                   ]}
                   requerido
                 />
@@ -663,25 +515,42 @@ const Inventario = () => {
                 valor={formularioMovimiento.cantidad}
                 onChange={manejarCambioMovimiento}
                 requerido
+                min="1"
               />
 
               <div>
-                <label className="form-label">Motivo</label>
+                <label className="form-label">Observaciones</label>
                 <textarea
-                  name="motivo"
+                  name="observaciones"
                   placeholder="Descripción del motivo del movimiento..."
-                  value={formularioMovimiento.motivo}
+                  value={formularioMovimiento.observaciones}
                   onChange={manejarCambioMovimiento}
                   className="form-input"
                   rows={3}
                 />
               </div>
 
-              {registroSeleccionado && (
-                <div className="bg-gray-50 p-4 rounded">
-                  <p className="text-sm text-gray-600">
-                    <strong>Stock actual:</strong> {registroSeleccionado.cantidad} unidades
-                  </p>
+              {/* ⭐ Información del stock */}
+              {productoSeleccionado && (
+                <div className="bg-gray-50 p-4 rounded border border-gray-200">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-700">Producto:</span>
+                      <span className="text-sm text-gray-900">{productoSeleccionado.producto_detalle?.nombre}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-700">Stock actual:</span>
+                      <span className="text-sm font-bold text-gray-900">{productoSeleccionado.stock_actual} unidades</span>
+                    </div>
+                    {formularioMovimiento.cantidad && (
+                      <div className="flex justify-between pt-2 border-t border-gray-300">
+                        <span className="text-sm font-medium text-gray-700">Stock después del movimiento:</span>
+                        <span className="text-sm font-bold text-primary-600">
+                          {calcularStockDespues()} unidades
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -698,7 +567,7 @@ const Inventario = () => {
         </Modal>
       )}
 
-      {/* Modal de Enviar Email - Para todos */}
+      {/* ⭐ MODAL: Enviar Email */}
       <Modal
         estaAbierto={modalEmailAbierto}
         onCerrar={cerrarModalEmail}
@@ -715,7 +584,7 @@ const Inventario = () => {
                     Se generará y enviará el PDF del inventario actual
                   </p>
                   <p className="text-xs text-blue-600 mt-1">
-                    El PDF incluirá todos los productos con su información de stock, ubicación y valores.
+                    El PDF incluirá todos los productos con su información de stock y valores.
                   </p>
                 </div>
               </div>
