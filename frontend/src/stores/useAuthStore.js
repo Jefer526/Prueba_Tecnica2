@@ -147,11 +147,13 @@ const useAuthStore = create((set, get) => ({
       return false;
     }
   },
-
   esAdministrador: () => {
     const usuario = get().usuario;
-    return usuario?.es_administrador || usuario?.tipo_usuario === 'ADMINISTRADOR';
+    return usuario?.rol === 'ADMINISTRADOR' ||       
+          usuario?.tipo_usuario === 'ADMINISTRADOR' ||
+          usuario?.es_administrador === true;
   },
+
 
   limpiarError: () => set({ error: null }),
 }));

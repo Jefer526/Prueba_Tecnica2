@@ -196,18 +196,26 @@ const Empresas = () => {
     }
 
     try {
-      await empresasService.activar(empresa.nit);
-      
-      const nuevoEstado = !empresa.activo;
-      mostrarAlerta(
-        'success', 
-        `Empresa ${nuevoEstado ? 'activada' : 'desactivada'} exitosamente`
-      );
+      // ✅ Llamar al endpoint correcto según el estado actual
+      if (empresa.activo) {
+        // Si está activa → inactivar
+        await empresasService.inactivar(empresa.nit);
+        mostrarAlerta('success', 'Empresa inactivada exitosamente');
+      } else {
+        // Si está inactiva → activar
+        await empresasService.activar(empresa.nit);
+        mostrarAlerta('success', 'Empresa activada exitosamente');
+      }
       
       await cargarEmpresas();
     } catch (error) {
       console.error('Error al cambiar estado de la empresa:', error);
-      mostrarAlerta('error', 'Error al cambiar estado de la empresa');
+      
+      const mensajeError = error.response?.data?.error 
+        || error.response?.data?.detail 
+        || 'Error al cambiar estado de la empresa';
+      
+      mostrarAlerta('error', mensajeError);
     }
   };
 

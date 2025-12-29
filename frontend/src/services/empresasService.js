@@ -31,15 +31,21 @@ const empresasService = {
     return respuesta.data;
   },
 
-  // Eliminar (desactivar) empresa
+  // Eliminar (hard delete) empresa
   eliminar: async (nit) => {
     const respuesta = await api.delete(`/empresas/${nit}/`);
     return respuesta.data;
   },
 
-  // Activar empresa
+  // ⭐ Activar empresa
   activar: async (nit) => {
     const respuesta = await api.post(`/empresas/${nit}/activar/`);
+    return respuesta.data;
+  },
+
+  // ⭐ Inactivar empresa (NUEVO)
+  inactivar: async (nit) => {
+    const respuesta = await api.post(`/empresas/${nit}/inactivar/`);
     return respuesta.data;
   },
 

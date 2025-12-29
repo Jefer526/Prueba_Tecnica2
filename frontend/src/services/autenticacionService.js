@@ -4,35 +4,57 @@ const autenticacionService = {
   // Iniciar sesión
   login: async (correo, contrasena) => {
     const respuesta = await api.post('/auth/login/', {
-      correo,
-      contrasena,
+      email: correo,
+      password: contrasena,
     });
-    return respuesta.data;
+    
+    // ⭐ NUEVO: Transformar respuesta para Zustand store
+    const respuestaTransformada = {
+      tokens: {
+        access: respuesta.data.access,
+        refresh: respuesta.data.refresh,
+      },
+      usuario: respuesta.data.usuario,
+    };
+    
+    // Guardar tokens manualmente también (por si acaso)
+    localStorage.setItem('token_acceso', respuesta.data.access);
+    localStorage.setItem('token_refresco', respuesta.data.refresh);
+    localStorage.setItem('usuario', JSON.stringify(respuesta.data.usuario));
+    
+    return respuestaTransformada;
   },
 
   // Registrar usuario
   registro: async (datos) => {
-    // Asegurar que se envían todos los campos necesarios
     const datosRegistro = {
-      correo: datos.correo,
-      contrasena: datos.contrasena,
-      confirmar_contrasena: datos.contrasena, // El backend requiere este campo
-      nombre_completo: datos.nombre_completo,
-      tipo_usuario: datos.tipo_usuario || 'EXTERNO',
+      email: datos.correo,
+      password: datos.contrasena,
+      nombre: datos.nombre_completo,
+      rol: datos.tipo_usuario || 'EXTERNO',
     };
     
     console.log('Datos enviados al backend:', datosRegistro);
     
-    const respuesta = await api.post('/auth/registro/', datosRegistro);
-    return respuesta.data;
+    const respuesta = await api.post('/auth/register/', datosRegistro);
+    
+    // ⭐ NUEVO: Transformar respuesta para Zustand store
+    const respuestaTransformada = {
+      tokens: {
+        access: respuesta.data.access || null,
+        refresh: respuesta.data.refresh || null,
+      },
+      usuario: respuesta.data.usuario,
+    };
+    
+    return respuestaTransformada;
   },
 
   // Cerrar sesión
-  logout: async (tokenRefresco) => {
-    const respuesta = await api.post('/auth/logout/', {
-      refresh_token: tokenRefresco,
-    });
-    return respuesta.data;
+  logout: () => {
+    localStorage.removeItem('token_acceso');
+    localStorage.removeItem('token_refresco');
+    localStorage.removeItem('usuario');
   },
 
   // Obtener perfil del usuario
@@ -51,6 +73,17 @@ const autenticacionService = {
   cambiarContrasena: async (datos) => {
     const respuesta = await api.post('/auth/cambiar-contrasena/', datos);
     return respuesta.data;
+  },
+  
+  // Verificar si está autenticado
+  isAuthenticated: () => {
+    return !!localStorage.getItem('token_acceso');
+  },
+  
+  // Obtener usuario actual
+  getCurrentUser: () => {
+    const userStr = localStorage.getItem('usuario');
+    return userStr ? JSON.parse(userStr) : null;
   },
 };
 

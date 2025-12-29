@@ -10,7 +10,3 @@ producto = Producto(
     empresa_id=1
 )
 
-print(f"✅ Nombre: {producto.nombre}")
-print(f"✅ Precio USD: ${producto.precio_usd}")
-print(f"✅ Precio COP: ${producto.precio_cop}")
-
