@@ -140,3 +140,51 @@ class UsuarioModel(models.Model):
     
     def __str__(self):
         return f"{self.nombre} ({self.email})"
+
+
+# ==================== CHATBOT ====================
+
+from django.db import models
+from django.conf import settings
+
+
+class ConversacionModel(models.Model):
+    """Modelo para guardar conversaciones del chatbot"""
+    
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='conversaciones_chatbot'
+    )
+    titulo = models.CharField(max_length=200, blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    activo = models.BooleanField(default=True)
+    
+    class Meta:
+        db_table = 'chatbot_conversacion'
+        ordering = ['-fecha_actualizacion']
+
+
+class MensajeModel(models.Model):
+    """Modelo para guardar mensajes individuales del chat"""
+    
+    ROLES = [
+        ('user', 'Usuario'),
+        ('assistant', 'Asistente'),
+        ('system', 'Sistema'),
+    ]
+    
+    conversacion = models.ForeignKey(
+        ConversacionModel,
+        on_delete=models.CASCADE,
+        related_name='mensajes'
+    )
+    rol = models.CharField(max_length=20, choices=ROLES)
+    contenido = models.TextField()
+    metadatos = models.JSONField(default=dict, blank=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'chatbot_mensaje'
+        ordering = ['fecha_creacion']

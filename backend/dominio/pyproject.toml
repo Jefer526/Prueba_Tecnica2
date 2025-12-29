@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "lite-thinking-dominio"
+version = "1.0.0"
+description = "Capa de Dominio - Sistema de Gestión de Inventario Lite Thinkingc"
+authors = ["Jefferson Perez <jefer5261@gmail.com>"]
+readme = "README.md"
+packages = [
+    { include = "entidades" },
+    { include = "excepciones" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+# Sin dependencias externas - Dominio puro
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+black = "^23.0.0"
+flake8 = "^6.0.0"
+mypy = "^1.5.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+

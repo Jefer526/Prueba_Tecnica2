@@ -29,4 +29,7 @@ urlpatterns = [
 
     # Autenticación
     path('', include('presentacion.api.urls_auth')),
+
+    # Chatbot
+    path('', include('presentacion.api.urls_chatbot')),
 ]
