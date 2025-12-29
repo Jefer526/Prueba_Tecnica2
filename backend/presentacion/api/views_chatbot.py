@@ -96,7 +96,8 @@ class ChatbotView(APIView):
                 )
                 
                 caso_uso_bajo_stock = ObtenerProductosBajoStockCasoDeUso(
-                    repositorio_inventario=repo_inventario
+                    repositorio_inventario=repo_inventario,
+                    repositorio_producto=repo_producto  # ✅ Agregar repositorio
                 )
                 
                 caso_uso_buscar = BuscarProductoCasoDeUso(

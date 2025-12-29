@@ -90,8 +90,13 @@ class ObtenerProductosBajoStockCasoDeUso:
     Caso de uso para obtener productos que requieren reorden
     """
     
-    def __init__(self, repositorio_inventario: IRepositorioInventario):
+    def __init__(
+        self,
+        repositorio_inventario: IRepositorioInventario,
+        repositorio_producto: IRepositorioProducto  # ✅ Agregar repositorio de producto
+    ):
         self.repo_inventario = repositorio_inventario
+        self.repo_producto = repositorio_producto  # ✅ Guardar referencia
     
     def ejecutar(self) -> dict:
         """
@@ -117,14 +122,18 @@ class ObtenerProductosBajoStockCasoDeUso:
         
         productos_criticos = []
         for inventario in inventarios_bajo_stock:
-            productos_criticos.append({
-                'codigo': 'N/A',  # Obtener del producto
-                'nombre': 'N/A',  # Obtener del producto
-                'empresa': 'N/A',  # Obtener de empresa
-                'cantidad_actual': inventario.stock_actual,
-                'cantidad_minima': inventario.stock_minimo,
-                'deficit': inventario.stock_minimo - inventario.stock_actual
-            })
+            # ✅ CORREGIDO: Obtener datos reales del producto
+            producto = self.repo_producto.obtener_por_id(inventario.producto_id)
+            
+            if producto:
+                productos_criticos.append({
+                    'codigo': producto.codigo,
+                    'nombre': producto.nombre,
+                    'empresa': inventario.empresa.nombre if hasattr(inventario, 'empresa') else 'N/A',
+                    'cantidad_actual': inventario.stock_actual,
+                    'cantidad_minima': inventario.stock_minimo,
+                    'deficit': inventario.stock_minimo - inventario.stock_actual
+                })
         
         return {
             'total_criticos': len(productos_criticos),
