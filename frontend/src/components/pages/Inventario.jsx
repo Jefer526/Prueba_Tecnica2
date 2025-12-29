@@ -110,7 +110,32 @@ const Inventario = () => {
     }
 
     if (filtroEmpresa !== '') {
-      resultados = resultados.filter(registro => registro.empresa === parseInt(filtroEmpresa));
+      // ✅ CAMBIO: Filtrar por NIT (string) en lugar de ID (number)
+      const empresaNitFiltro = filtroEmpresa;  // NO convertir a número
+      
+      // DEBUG: Ver qué estamos filtrando
+      console.log('🔍 FILTRO ACTIVO - NIT Empresa:', empresaNitFiltro, typeof empresaNitFiltro);
+      console.log('📋 Primeros 3 registros:', resultados.slice(0, 3).map(r => ({
+        empresa: r.empresa,
+        empresaDetalle: r.empresa_detalle,
+        tipo: typeof r.empresa
+      })));
+      
+      resultados = resultados.filter(registro => {
+        // ✅ CAMBIO: Obtener NIT de la empresa
+        const empresaNit = registro.empresa_detalle?.nit || registro.empresa?.nit || registro.empresa;
+        const match = empresaNit === empresaNitFiltro;
+        
+        // DEBUG cada comparación (solo primeros 3)
+        const index = resultados.indexOf(registro);
+        if (index < 3) {
+          console.log(`  [${index}] Comparando: "${empresaNit}" === "${empresaNitFiltro}" = ${match} (${registro.empresa_detalle?.nombre})`);
+        }
+        
+        return match;
+      });
+      
+      console.log('✅ Registros después de filtrar:', resultados.length);
     }
 
     if (filtroReorden === 'si') {
@@ -129,6 +154,13 @@ const Inventario = () => {
       
       const registrosArray = Array.isArray(datos) ? datos : (datos.results || datos.data || []);
       
+      // DEBUG temporal - eliminar después
+      console.log('📋 DATOS INVENTARIO:', registrosArray);
+      if (registrosArray.length > 0) {
+        console.log('📋 PRIMER REGISTRO:', registrosArray[0]);
+        console.log('📋 CAMPO EMPRESA:', registrosArray[0]?.empresa, typeof registrosArray[0]?.empresa);
+      }
+      
       setRegistros(registrosArray);
       setRegistrosFiltrados(registrosArray);
     } catch (error) {
@@ -145,6 +177,11 @@ const Inventario = () => {
       const empresasArray = Array.isArray(datos) ? datos : (datos.results || datos.data || []);
       
       const empresasActivas = empresasArray.filter(emp => emp.activo);
+      
+      // DEBUG: Ver qué empresas se cargaron
+      console.log('🏢 EMPRESAS CARGADAS:', empresasActivas);
+      console.log('🏢 PRIMERA EMPRESA:', empresasActivas[0]);
+      
       setEmpresas(empresasActivas);
     } catch (error) {
       console.error('Error al cargar empresas:', error);
@@ -417,13 +454,20 @@ const Inventario = () => {
             <Select
               nombre="filtroEmpresa"
               valor={filtroEmpresa}
-              onChange={(e) => setFiltroEmpresa(e.target.value)}
+              onChange={(e) => {
+                const valor = e.target.value;
+                console.log('🏢 SELECT CAMBIÓ (NIT):', valor, typeof valor);
+                setFiltroEmpresa(valor);
+              }}
               opciones={[
                 { valor: '', etiqueta: 'Todas las empresas' },
-                ...empresas.map(emp => ({
-                  valor: emp.id,
-                  etiqueta: emp.nombre
-                }))
+                ...empresas.map(emp => {
+                  console.log('🏢 Opción:', { nit: emp.nit, nombre: emp.nombre });
+                  return {
+                    valor: emp.nit,  // ✅ CAMBIO: usar nit en lugar de id
+                    etiqueta: emp.nombre
+                  };
+                })
               ]}
             />
           </div>
