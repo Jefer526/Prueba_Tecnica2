@@ -1,68 +1,16 @@
-"""
-Excepciones del Dominio
-Excepciones específicas de reglas de negocio
-"""
+# En el shell:
+from dominio.entidades.producto import Producto, CategoriaProducto
+from decimal import Decimal
 
-from .excepciones_negocio import (
-    # Base
-    ExcepcionDominio,
-    
-    # Producto
-    ProductoNoEncontrado,
-    ProductoInactivo,
-    CodigoProductoDuplicado,
-    PrecioInvalido,
-    CategoriaInvalida,
-    
-    # Inventario
-    StockInsuficiente,
-    StockNegativo,
-    StockMaximoExcedido,
-    InventarioNoEncontrado,
-    
-    # Empresa
-    NITDuplicado,
-    NITInvalido,
-    EmpresaNoEncontrada,
-    EmpresaInactiva,
-    
-    # Usuario
-    UsuarioNoEncontrado,
-    EmailDuplicado,
-    CredencialesInvalidas,
-    
-    # General
-    DatosInvalidos,
+producto = Producto(
+    nombre="Test",
+    descripcion="Prueba",
+    precio_usd=Decimal("100"),
+    categoria=CategoriaProducto.TECNOLOGIA,
+    empresa_id=1
 )
 
-__all__ = [
-    # Base
-    "ExcepcionDominio",
-    
-    # Producto
-    "ProductoNoEncontrado",
-    "ProductoInactivo",
-    "CodigoProductoDuplicado",
-    "PrecioInvalido",
-    "CategoriaInvalida",
-    
-    # Inventario
-    "StockInsuficiente",
-    "StockNegativo",
-    "StockMaximoExcedido",
-    "InventarioNoEncontrado",
-    
-    # Empresa
-    "NITDuplicado",
-    "NITInvalido",
-    "EmpresaNoEncontrada",
-    "EmpresaInactiva",
-    
-    # Usuario
-    "UsuarioNoEncontrado",
-    "EmailDuplicado",
-    "CredencialesInvalidas",
-    
-    # General
-    "DatosInvalidos",
-]
+print(f"✅ Nombre: {producto.nombre}")
+print(f"✅ Precio USD: ${producto.precio_usd}")
+print(f"✅ Precio COP: ${producto.precio_cop}")
+

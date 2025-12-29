@@ -1,23 +1,16 @@
-"""
-Entidades del Dominio
-Modelos del negocio en Python puro
-"""
+# En el shell:
+from dominio.entidades.producto import Producto, CategoriaProducto
+from decimal import Decimal
 
-from .empresa import Empresa
-from .producto import Producto, CategoriaProducto, obtener_prefijo_categoria
-from .inventario import RegistroInventario, EstadoStock
-from .movimiento import MovimientoInventario, TipoMovimiento
-from .usuario import Usuario, RolUsuario
+producto = Producto(
+    nombre="Test",
+    descripcion="Prueba",
+    precio_usd=Decimal("100"),
+    categoria=CategoriaProducto.TECNOLOGIA,
+    empresa_id=1
+)
 
-__all__ = [
-    "Empresa",
-    "Producto",
-    "CategoriaProducto",
-    "obtener_prefijo_categoria",
-    "RegistroInventario",
-    "EstadoStock",
-    "MovimientoInventario",
-    "TipoMovimiento",
-    "Usuario",
-    "RolUsuario",
-]
+print(f"✅ Nombre: {producto.nombre}")
+print(f"✅ Precio USD: ${producto.precio_usd}")
+print(f"✅ Precio COP: ${producto.precio_cop}")
+
